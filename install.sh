@@ -3,8 +3,8 @@
 #
 # IFIM-Proxy: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-# @commit: 893d6f180cea6aaad28856a4ce9a38cda3f24cc7
-SCRIPT_VERSION="2026.07.04+893d6f1"
+# @commit: 02efddde872885a56009c63fdae6d87ff59b808e
+SCRIPT_VERSION="2026.07.04+02efddd"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -119,9 +119,16 @@ get_script_commit_ref() {
     sed -n '1,20p' "$0" 2>/dev/null | sed -n 's/^# @commit: //p' | head -1
 }
 
+fetch_remote_script_commit_ref() {
+    local sha="$1"
+    curl -fsSL --max-time 15 \
+        "https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/install.sh" \
+        2>/dev/null | sed -n '1,20p' | sed -n 's/^# @commit: //p' | head -1
+}
+
 # 与 GitHub 最新 commit 比对；发现旧版则自动下载并重跑
 check_script_version() {
-    local sha remote_ver local_ref
+    local sha remote_ver local_ref remote_ref
 
     [[ "${SKIP_VERSION_CHECK}" == true ]] && return 0
     command -v curl >/dev/null 2>&1 || return 0
@@ -132,8 +139,9 @@ check_script_version() {
         return 0
     }
 
-    if [[ -n "${local_ref}" && "${local_ref}" != "pending" && "${local_ref}" == "${sha}" ]]; then
-        info "脚本已是最新（${sha:0:7}）"
+    remote_ref=$(fetch_remote_script_commit_ref "${sha}") || true
+    if [[ -n "${local_ref}" && -n "${remote_ref}" && "${local_ref}" == "${remote_ref}" ]]; then
+        info "脚本已是最新（${remote_ref:0:7}）"
         return 0
     fi
 
@@ -143,7 +151,7 @@ check_script_version() {
         return 0
     fi
 
-    if [[ "${remote_ver}" == "${SCRIPT_VERSION}" && "${local_ref}" == "${sha}" ]]; then
+    if [[ "${remote_ver}" == "${SCRIPT_VERSION}" && -n "${remote_ref}" && "${local_ref}" == "${remote_ref}" ]]; then
         info "脚本版本 v${SCRIPT_VERSION}（已是最新）"
         return 0
     fi

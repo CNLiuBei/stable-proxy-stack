@@ -38,7 +38,11 @@ fi
 sed_inplace "s/^SCRIPT_VERSION=\".*\"/SCRIPT_VERSION=\"${VER}\"/" "${INSTALL_SH}"
 
 if [[ -f "${README}" ]]; then
-    sed_inplace "s/当前 \*\*v[^*]*\*\*/当前 **v${VER}**/" "${README}"
+    if grep -q 'push 到 main 后由 CI 自动同步' "${README}"; then
+        : # 说明性文字，无需替换固定版本号
+    else
+        sed_inplace "s/当前 \*\*v[^*]*\*\*/当前 **v${VER}**/" "${README}"
+    fi
 fi
 
 preview_cfg="${ROOT}/assets/preview/config.json"

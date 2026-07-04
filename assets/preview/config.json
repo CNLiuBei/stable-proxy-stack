@@ -5,5 +5,5 @@
   "realityLink": "vless://00000000-0000-0000-0000-000000000001@demo.example.com:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=DemoPublicKey&sid=abcd1234&type=tcp#IFIM-Reality",
   "hy2Link": "hysteria2://demo-password@demo.example.com:443?obfs=salamander&obfs-password=demo-obfs&sni=demo.example.com&insecure=0#IFIM-Hysteria2",
   "created": "2026-07-04 07:29 UTC",
-  "version": "2026.07.04+893d6f1"
+  "version": "2026.07.04+02efddd"
 }
