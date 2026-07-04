@@ -102,7 +102,7 @@ upgrade_install_script() {
     local url tmp
 
     url="https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/install.sh"
-    tmp=$(mktemp /tmp/stable-proxy-install.XXXXXX.sh)
+    tmp=$(mktemp /tmp/ifim-install.XXXXXX.sh)
     if ! curl -fsSL --max-time 30 "${url}" -o "${tmp}"; then
         rm -f "${tmp}"
         err "无法下载最新脚本（v${remote_ver}），请稍后重试"
@@ -111,12 +111,47 @@ upgrade_install_script() {
     warn "当前 v${SCRIPT_VERSION} → 自动拉取最新 v${remote_ver}"
     SKIP_VERSION_CHECK=true
     export SKIP_VERSION_CHECK
-    exec bash "${tmp}" "${ORIG_INSTALL_ARGS[@]}"
+    if [[ -r /dev/tty ]]; then
+        exec bash "${tmp}" "${ORIG_INSTALL_ARGS[@]}" </dev/tty
+    else
+        exec bash "${tmp}" "${ORIG_INSTALL_ARGS[@]}"
+    fi
 }
 
 # 读取 install.sh 内嵌的 commit ref（由 sync-version.sh / CI 写入）
 get_script_commit_ref() {
-    sed -n '1,20p' "$0" 2>/dev/null | sed -n 's/^# @commit: //p' | head -1
+    local src="${BASH_SOURCE[0]:-}"
+    case "${src##*/}" in
+        bash|sh|"") return 0 ;;
+    esac
+    [[ -f "${src}" ]] || return 0
+    sed -n '1,20p' "${src}" | sed -n 's/^# @commit: //p' | head -1
+}
+
+# curl | bash 时 $0 为 bash，需落盘并从 /dev/tty 重跑才能交互
+reexec_if_piped() {
+    local src="${BASH_SOURCE[0]:-}"
+    case "${src##*/}" in
+        bash|sh) ;;
+        *) return 0 ;;
+    esac
+
+    local sha tmp
+    sha=$(github_main_sha) || err "无法连接 GitHub 获取安装脚本"
+    tmp=$(mktemp /tmp/ifim-install.XXXXXX.sh)
+    if ! curl -fsSL --max-time 30 \
+        "https://raw.githubusercontent.com/${GITHUB_REPO}/${sha}/install.sh" \
+        -o "${tmp}"; then
+        rm -f "${tmp}"
+        err "无法下载安装脚本"
+    fi
+    chmod 755 "${tmp}"
+    export SKIP_VERSION_CHECK=true
+    if [[ -r /dev/tty ]]; then
+        exec bash "${tmp}" "${ORIG_INSTALL_ARGS[@]}" </dev/tty
+    else
+        exec bash "${tmp}" "${ORIG_INSTALL_ARGS[@]}"
+    fi
 }
 
 fetch_remote_script_commit_ref() {
@@ -140,6 +175,16 @@ check_script_version() {
     }
 
     remote_ref=$(fetch_remote_script_commit_ref "${sha}") || true
+
+    # curl | bash 时读不到本地 @commit，但版本号一致则视为最新
+    if [[ -z "${local_ref}" && -n "${remote_ref}" ]]; then
+        remote_ver=$(fetch_remote_script_version "${sha}") || true
+        if [[ -n "${remote_ver}" && "${remote_ver}" == "${SCRIPT_VERSION}" ]]; then
+            info "脚本已是最新（${remote_ref:0:7}）"
+            return 0
+        fi
+    fi
+
     if [[ -n "${local_ref}" && -n "${remote_ref}" && "${local_ref}" == "${remote_ref}" ]]; then
         info "脚本已是最新（${remote_ref:0:7}）"
         return 0
@@ -1736,6 +1781,7 @@ EOF
 export DEBIAN_FRONTEND=noninteractive
 
 ensure_bootstrap_tools
+reexec_if_piped
 show_script_version
 check_script_version
 prompt_install_options
