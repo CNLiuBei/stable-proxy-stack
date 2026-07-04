@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="/etc/stable-proxy-stack"
-WEB_ROOT="/var/www/stable-proxy"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/common.env
+source "${SCRIPT_DIR}/common.env"
 
 if [[ "${1:-}" != "-y" ]]; then
     read -r -p "确认卸载 IFIM-Proxy？此操作不可恢复 [y/N]: " ans

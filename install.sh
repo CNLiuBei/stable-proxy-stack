@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # -*- coding: utf-8 -*-
 #
-# stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
+# IFIM-Proxy: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.17"
+SCRIPT_VERSION="0.0.18"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -76,7 +76,7 @@ fail() { echo -e "${RED}[x]${NC} $*" >&2; }
 err()  { fail "$*"; exit 1; }
 
 show_script_version() {
-    echo -e "${CYAN}[i]${NC} stable-proxy-stack 安装脚本 ${BOLD}v${SCRIPT_VERSION}${NC}"
+    echo -e "${CYAN}[i]${NC} IFIM-Proxy 安装脚本 ${BOLD}v${SCRIPT_VERSION}${NC}"
 }
 
 # 获取 GitHub main 最新 commit（绕过 raw CDN 缓存）
@@ -344,7 +344,7 @@ check_dns_anomalies() {
 check_existing_install() {
     [[ "${CHECK_ONLY}" == true ]] && return 0
     if [[ -f "${INSTALL_DIR}/config.json" ]] || [[ -f /etc/systemd/system/sing-box.service ]]; then
-        warn "检测到本机已有 stable-proxy-stack 安装（${INSTALL_DIR}）"
+        warn "检测到本机已有 IFIM-Proxy 安装（${INSTALL_DIR}）"
         if [[ "${ASSUME_YES}" == false ]]; then
             prompt_yes_no "继续安装将覆盖现有配置，是否继续？" "n" \
                 || err "已取消。如需完全卸载: bash uninstall.sh"
@@ -438,7 +438,7 @@ on_install_error() {
 show_welcome() {
     echo
     echo -e "${BOLD}============================================================${NC}"
-    echo -e "${BOLD}  stable-proxy-stack — 交互式安装向导${NC}"
+    echo -e "${BOLD}  IFIM-Proxy — 交互式安装向导${NC}"
     echo -e "${BOLD}  版本 v${SCRIPT_VERSION}${NC}"
     echo -e "${BOLD}============================================================${NC}"
     echo
@@ -1549,7 +1549,7 @@ setup_systemd() {
     log "正在创建 systemd 服务..."
     cat >/etc/systemd/system/sing-box.service <<EOF
 [Unit]
-Description=Sing-Box (stable-proxy-stack)
+Description=Sing-Box (IFIM-Proxy)
 After=network.target
 
 [Service]

@@ -62,10 +62,26 @@ mkdir -p "${INSTALL_DIR}/scripts"
 for name in "${scripts[@]}"; do
     url="https://raw.githubusercontent.com/${GITHUB_REPO}/${branch}/scripts/${name}?t=${TS}"
     dest="${INSTALL_DIR}/scripts/${name}"
-    curl -fsSL -H "Cache-Control: no-cache" "${url}" -o "${dest}"
+    if ! curl -fsSL -H "Cache-Control: no-cache" "${url}" -o "${dest}"; then
+        echo "下载失败: ${name}"
+        exit 1
+    fi
+    if [[ ! -s "${dest}" ]]; then
+        echo "下载为空: ${name}"
+        exit 1
+    fi
     chmod 755 "${dest}"
     echo "已更新: ${dest}"
 done
+
+remote_ver=$(curl -fsSL -H "Cache-Control: no-cache" \
+    "https://raw.githubusercontent.com/${GITHUB_REPO}/${branch}/install.sh?t=${TS}" \
+    | sed -n 's/^SCRIPT_VERSION="\([^"]*\)".*/\1/p' | head -1)
+
+if [[ -n "${remote_ver}" ]]; then
+    echo "${remote_ver}" >"${INSTALL_DIR}/.stack-version"
+    echo "远端版本: v${remote_ver}"
+fi
 
 if [[ "${REFRESH_PANEL}" == true && -f "${INSTALL_DIR}/scripts/refresh-panel.sh" ]]; then
     bash "${INSTALL_DIR}/scripts/refresh-panel.sh"

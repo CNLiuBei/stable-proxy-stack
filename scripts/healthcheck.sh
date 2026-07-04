@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="/etc/stable-proxy-stack"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/common.env
+source "${SCRIPT_DIR}/common.env"
+
 STAMP="/run/stable-proxy-healthcheck.stamp"
 COOLDOWN=900
 

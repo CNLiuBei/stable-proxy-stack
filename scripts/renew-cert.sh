@@ -2,7 +2,9 @@
 # TLS 自动续签 — 由 cron 每日调用，仅在证书临近到期时续签
 set -euo pipefail
 
-INSTALL_DIR="/etc/stable-proxy-stack"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/common.env
+source "${SCRIPT_DIR}/common.env"
 
 log() {
     echo "$(date '+%F %T') [renew] $*"

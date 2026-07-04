@@ -530,6 +530,14 @@
       document.getElementById('copy-reality').onclick = () => copyText(data.realityLink);
       document.getElementById('copy-hy2').onclick = () => copyText(data.hy2Link);
 
+      document.getElementById('sub-url').onclick = () => copyText(data.subUrl);
+      document.getElementById('reality-link').onclick = () => copyText(data.realityLink);
+      document.getElementById('hy2-link').onclick = () => copyText(data.hy2Link);
+      ['sub-url', 'reality-link', 'hy2-link'].forEach(id => {
+        document.getElementById(id).title = '点击拷贝';
+        document.getElementById(id).style.cursor = 'pointer';
+      });
+
       renderSubImports();
       renderNodeImports('import-reality-btns', data.realityLink);
       renderNodeImports('import-hy2-btns', data.hy2Link);

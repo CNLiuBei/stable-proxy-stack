@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -u
 
-INSTALL_DIR="/etc/stable-proxy-stack"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/common.env
+source "${SCRIPT_DIR}/common.env"
 
 if nginx -t 2>/dev/null; then
     systemctl reload nginx 2>/dev/null || true
