@@ -348,7 +348,7 @@ on_install_error() {
     warn "常见原因:"
     warn "  · DNS 未生效或 A 记录未指向本机"
     warn "  · Cloudflare 仍开启橙色云（应改灰色云朵）"
-    warn "  · Standalone 模式但 TCP 80 未在云防火墙放行"
+    warn "  · Standalone 模式但 TCP 80 不可达（检查 Nginx/占用或上游拦截）"
     warn "  · CF Token 权限不足（需 DNS Edit）"
     warn "修复后重新运行: bash install.sh"
     warn "如需回滚: bash uninstall.sh"
@@ -491,7 +491,7 @@ prompt_cert_method() {
     echo
     echo -e "${BOLD}--- 步骤 3: 证书申请 ---${NC}"
     echo "  [1] Cloudflare DNS  — 推荐，无需开放 80 端口"
-    echo "  [2] Standalone HTTP — 需云防火墙放行 TCP 80"
+    echo "  [2] Standalone HTTP — 需公网 TCP 80（本机 UFW 自动放行）"
     echo
 
     if [[ -n "${CF_TOKEN}" ]]; then
@@ -505,7 +505,7 @@ prompt_cert_method() {
         CERT_MODE="standalone"
         CF_TOKEN=""
         info "证书方式: Standalone（-y 且未传 --cf-token）"
-        warn "请确保云防火墙放行 TCP 80，或传入 --cf-token"
+        info "本机 UFW 将自动检测并放行所需端口"
         return
     fi
 
@@ -529,7 +529,6 @@ prompt_cert_method() {
                 CERT_MODE="standalone"
                 CF_TOKEN=""
                 info "证书方式: Let's Encrypt Standalone"
-                warn "请开放云防火墙端口: 22, 80, 443/tcp, 443/udp, 8443, 444-${HY2_PORT_END}/udp"
                 guard_standalone_port80
                 break
                 ;;
@@ -857,7 +856,7 @@ ensure_firewall_ports() {
     fi
 
     if [[ -z "${CF_TOKEN}" ]]; then
-        warn "云厂商防火墙（Vultr/AWS 等）需在控制面板手动放行 80，脚本无法自动修改"
+        info "Standalone 证书：若 80 仍不可达，请检查是否绑定了云防火墙安全组"
     fi
 }
 
@@ -983,8 +982,7 @@ run_preflight() {
 
     # firewall / cloud firewall hints for standalone
     if [[ -z "${CF_TOKEN}" ]]; then
-        add_warn "Standalone 证书需要公网可访问 TCP 80"
-        add_warn "本机 UFW 将在安装时自动放行；云防火墙（Vultr 等）需在面板手动开放"
+        add_warn "Standalone 证书需要公网可访问 TCP 80（本机 UFW 将自动放行）"
     else
         info "Cloudflare DNS 证书: 无需 80 端口"
     fi
