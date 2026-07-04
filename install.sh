@@ -452,20 +452,25 @@ validate_cf_token() {
     fi
 
     info "正在验证 Cloudflare Token..."
-    local resp apex zone_name
+    local resp apex zone_name curl_rc=0
+
     if command -v curl >/dev/null 2>&1; then
-        resp=$(curl -fsS --max-time 20 \
+        resp=$(curl -sS --max-time 20 \
             -H "Authorization: Bearer ${CF_TOKEN}" \
-            "https://api.cloudflare.com/client/v4/user/tokens/verify" 2>/dev/null) || resp=""
+            "https://api.cloudflare.com/client/v4/user/tokens/verify" 2>/dev/null) || curl_rc=$?
     else
         resp=$(wget -q --timeout=20 -O - \
             --header="Authorization: Bearer ${CF_TOKEN}" \
-            "https://api.cloudflare.com/client/v4/user/tokens/verify" 2>/dev/null) || resp=""
+            "https://api.cloudflare.com/client/v4/user/tokens/verify" 2>/dev/null) || curl_rc=$?
     fi
 
-    if [[ -z "${resp}" ]]; then
-        warn "无法连接 Cloudflare API，跳过 Token 在线验证"
+    if [[ ${curl_rc} -ne 0 || -z "${resp}" ]]; then
+        warn "无法连接 Cloudflare API（网络/DNS/超时），跳过 Token 在线验证"
+        warn "证书申请阶段仍需要能访问 api.cloudflare.com；若失败请检查 VPS 出站 443 或改用 Standalone 模式"
         return 0
+    fi
+    if echo "${resp}" | grep -q '"success"[[:space:]]*:[[:space:]]*false'; then
+        err "Cloudflare Token 无效或权限不足，请重新创建（需 DNS Edit 权限）"
     fi
     if ! echo "${resp}" | grep -q '"status"[[:space:]]*:[[:space:]]*"active"'; then
         err "Cloudflare Token 无效或已过期，请重新创建（需 DNS Edit 权限）"
