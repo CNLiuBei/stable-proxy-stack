@@ -126,13 +126,14 @@ if [[ ! -f "${HOME}/.acme.sh/acme.sh" ]]; then
 fi
 # shellcheck source=/dev/null
 source "${HOME}/.acme.sh/acme.sh.env" 2>/dev/null || true
+~/.acme.sh/acme.sh --set-default-ca --server letsencrypt >/dev/null 2>&1 || true
 
 if [[ -n "${CF_TOKEN}" ]]; then
     export CF_Token="${CF_TOKEN}"
-    ~/.acme.sh/acme.sh --issue --dns dns_cf -d "${DOMAIN}" --keylength ec-256 --force
+    ~/.acme.sh/acme.sh --issue --dns dns_cf -d "${DOMAIN}" --keylength ec-256 --force --server letsencrypt
 else
     systemctl stop nginx 2>/dev/null || true
-    ~/.acme.sh/acme.sh --issue --standalone -d "${DOMAIN}" --keylength ec-256 --force
+    ~/.acme.sh/acme.sh --issue --standalone -d "${DOMAIN}" --keylength ec-256 --force --server letsencrypt
 fi
 
 ~/.acme.sh/acme.sh --install-cert -d "${DOMAIN}" --ecc \
