@@ -1,5 +1,7 @@
 #!/bin/bash
+set -euo pipefail
 INSTALL_DIR="/etc/stable-proxy-stack"
+
 if nginx -t 2>/dev/null; then
     systemctl reload nginx
 fi

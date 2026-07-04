@@ -30,9 +30,9 @@ apt-get update && apt-get install -y curl wget ca-certificates && \
 curl -fsSL "https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh?v=$(date +%s)" | bash
 ```
 
-安装开始时会显示脚本版本（当前 **v0.0.2**）。若与 GitHub 最新不一致，会提示重新拉取，避免 CDN 缓存旧脚本。
+安装开始时会显示脚本版本（当前 **v0.0.3**）。若与 GitHub 最新不一致，会提示重新拉取，避免 CDN 缓存旧脚本。
 
-重装时若已有有效 TLS 证书（本机或 acme.sh），将自动复用，不会重复向 Let's Encrypt 申请。
+重装时若已有有效 TLS 证书（本机或 acme.sh），将自动复用，不会重复向 Let's Encrypt 申请。证书临近到期时，每天 **03:00 / 15:00** 自动续签并重载服务。
 
 按中文提示操作：输入域名 → 自动检测 DNS → 选证书方式 → 确认安装。
 
@@ -55,6 +55,7 @@ https://你的域名:8443/s/随机token/
 | 问题 | 处理 |
 |------|------|
 | 证书申请失败 | 检查 DNS 是否生效；CF 是否灰色云朵；Standalone 是否放了 80 端口 |
+| 证书会自动续签吗 | 会。每天 03:00/15:00 检查，临近到期自动续签；日志见 `/etc/stable-proxy-stack/renew.log` |
 | 只有 22 能连 | 去云厂商面板开防火墙，或改用 CF DNS 证书 |
 | 想先检查环境 | 命令末尾加 `--check-only` |
 | 重装 / 覆盖 | 脚本会提示确认；完全卸载见下方 |

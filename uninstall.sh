@@ -12,6 +12,9 @@ while iptables -t nat -L PREROUTING -n --line-numbers 2>/dev/null | grep -q "sta
     iptables -t nat -D PREROUTING "${LINE}"
 done
 
+echo "Removing cron jobs..."
+(crontab -l 2>/dev/null | grep -vE 'stable-proxy-stack|stable-proxy') | crontab - 2>/dev/null || true
+
 echo "Removing files..."
 rm -rf "${INSTALL_DIR}"
 rm -f /etc/systemd/system/sing-box.service

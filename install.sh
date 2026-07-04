@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.2"
+SCRIPT_VERSION="0.0.3"
 
 set -euo pipefail
 
@@ -1226,6 +1226,7 @@ issue_tls_cert() {
     if tls_cert_usable "${crt}" "${key}" "${DOMAIN}"; then
         end_date=$(openssl x509 -in "${crt}" -noout -enddate 2>/dev/null | cut -d= -f2-)
         log "检测到有效 TLS 证书，跳过申请（到期 ${end_date}）"
+        write_cert_meta
         return 0
     fi
 
@@ -1234,6 +1235,7 @@ issue_tls_cert() {
     if acme_cert_usable "${DOMAIN}"; then
         log "acme.sh 已有 ${DOMAIN} 有效证书，直接安装使用"
         install_tls_cert_files
+        write_cert_meta
         end_date=$(openssl x509 -in "${crt}" -noout -enddate 2>/dev/null | cut -d= -f2-)
         info "TLS 证书已就绪（到期 ${end_date}）"
         return 0
@@ -1241,16 +1243,50 @@ issue_tls_cert() {
 
     log "未找到可用证书，正在向 Let's Encrypt 申请..."
     if [[ -n "${CF_TOKEN}" ]]; then
+        CERT_MODE="cf"
         export CF_Token="${CF_TOKEN}"
         "${HOME}/.acme.sh/acme.sh" --issue --dns dns_cf -d "${DOMAIN}" --keylength ec-256 --server letsencrypt
     else
+        CERT_MODE="standalone"
         systemctl stop nginx 2>/dev/null || true
-        "${HOME}/.acme.sh/acme.sh" --issue --standalone -d "${DOMAIN}" --keylength ec-256 --server letsencrypt
+        "${HOME}/.acme.sh/acme.sh" --issue --standalone -d "${DOMAIN}" --keylength ec-256 --server letsencrypt \
+            --pre-hook "systemctl stop nginx 2>/dev/null || true" \
+            --post-hook "systemctl start nginx 2>/dev/null || true"
+        systemctl start nginx 2>/dev/null || true
     fi
 
     install_tls_cert_files
+    write_cert_meta
     end_date=$(openssl x509 -in "${crt}" -noout -enddate 2>/dev/null | cut -d= -f2-)
     log "TLS 证书申请完成（到期 ${end_date}）"
+}
+
+write_cert_meta() {
+    local mode="standalone"
+    [[ -n "${CF_TOKEN}" ]] && mode="cf"
+    CERT_MODE="${mode}"
+
+    cat >"${INSTALL_DIR}/cert.env" <<EOF
+DOMAIN="${DOMAIN}"
+CERT_MODE="${mode}"
+EMAIL="${EMAIL}"
+EOF
+    chmod 644 "${INSTALL_DIR}/cert.env"
+
+    if [[ "${mode}" == "cf" && -n "${CF_TOKEN}" ]]; then
+        printf '%s' "${CF_TOKEN}" >"${INSTALL_DIR}/cf-token"
+        chmod 600 "${INSTALL_DIR}/cf-token"
+    else
+        rm -f "${INSTALL_DIR}/cf-token"
+    fi
+}
+
+setup_cert_renewal() {
+    log "正在配置 TLS 自动续签..."
+    install_tls_cert_files 2>/dev/null || true
+    write_cert_meta
+    setup_cron
+    info "证书自动续签: 每天 03:00 / 15:00 检查，临近到期时自动续签"
 }
 
 write_singbox_config() {
@@ -1454,10 +1490,9 @@ setup_firewall() {
 }
 
 setup_cron() {
-    log "正在设置定时任务..."
-    (crontab -l 2>/dev/null | grep -v stable-proxy; \
-     echo "*/5 * * * * /bin/bash ${INSTALL_DIR}/scripts/healthcheck.sh"; \
-     echo "0 3 * * * ${HOME}/.acme.sh/acme.sh --renew -d ${DOMAIN} --force && /bin/bash ${INSTALL_DIR}/scripts/renew-hook.sh") \
+    (crontab -l 2>/dev/null | grep -vE 'stable-proxy-stack|stable-proxy'; \
+     echo "0 3,15 * * * /bin/bash ${INSTALL_DIR}/scripts/renew-cert.sh >> ${INSTALL_DIR}/renew.log 2>&1 # stable-proxy-stack"; \
+     echo "*/5 * * * * /bin/bash ${INSTALL_DIR}/scripts/healthcheck.sh # stable-proxy-stack") \
     | crontab -
 }
 
@@ -1489,6 +1524,12 @@ verify_install() {
         info "TLS 证书: 正常（到期 $(openssl x509 -in "${INSTALL_DIR}/tls/${DOMAIN}.crt" -noout -enddate 2>/dev/null | cut -d= -f2)）"
     else
         fail "TLS 证书: 缺失"
+        ok=false
+    fi
+    if [[ -f "${INSTALL_DIR}/cert.env" ]] && crontab -l 2>/dev/null | grep -q 'renew-cert.sh'; then
+        info "TLS 自动续签: 已配置（每天 03:00 / 15:00）"
+    else
+        fail "TLS 自动续签: 未配置"
         ok=false
     fi
     [[ "${ok}" == true ]] || err "安装后验证失败，请查看 journalctl -u sing-box -n 50"
@@ -1632,12 +1673,13 @@ mkdir -p "${INSTALL_DIR}/scripts" "${WEB_ROOT}"
 fetch_asset "scripts/port-hopping.sh" "${INSTALL_DIR}/scripts/port-hopping.sh"
 fetch_asset "scripts/healthcheck.sh" "${INSTALL_DIR}/scripts/healthcheck.sh"
 fetch_asset "scripts/renew-hook.sh" "${INSTALL_DIR}/scripts/renew-hook.sh"
+fetch_asset "scripts/renew-cert.sh" "${INSTALL_DIR}/scripts/renew-cert.sh"
 fetch_asset "assets/index.html" "${WEB_ROOT}/index.html"
 
 write_singbox_config
 setup_nginx
 setup_systemd
 setup_firewall
-setup_cron
+setup_cert_renewal
 verify_install
 print_links
