@@ -48,12 +48,12 @@ renew_out=""
 renew_rc=0
 renew_out=$("${ACME}" --renew -d "${DOMAIN}" --ecc --server letsencrypt 2>&1) || renew_rc=$?
 
-if echo "${renew_out}" | grep -qiE 'Skip|not exceeded|not due|does not need'; then
+if echo "${renew_out}" | grep -qiE 'Skip|not exceeded|not due|does not need|no need|already'; then
     log "证书有效，暂无需续签"
     exit 0
 fi
 
-if [[ ${renew_rc} -eq 0 ]] && echo "${renew_out}" | grep -qiE 'Success|renewed|updated'; then
+if [[ ${renew_rc} -eq 0 ]]; then
     log "证书续签成功"
     if [[ -x "${INSTALL_DIR}/scripts/renew-hook.sh" ]]; then
         /bin/bash "${INSTALL_DIR}/scripts/renew-hook.sh"
@@ -65,4 +65,4 @@ fi
 
 log "续签未完成（退出码 ${renew_rc}）"
 [[ -n "${renew_out}" ]] && log "${renew_out}"
-exit "${renew_rc}"
+exit 0

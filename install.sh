@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.5"
+SCRIPT_VERSION="0.0.7"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -1295,7 +1295,18 @@ issue_tls_cert() {
 
 write_cert_meta() {
     local mode="standalone"
-    [[ -n "${CF_TOKEN}" ]] && mode="cf"
+    local existing_env="${INSTALL_DIR}/cert.env"
+
+    if [[ -n "${CF_TOKEN}" ]]; then
+        mode="cf"
+    elif [[ -f "${existing_env}" ]]; then
+        # 复用已有证书时保留原 CF 续签配置
+        # shellcheck source=/dev/null
+        source "${existing_env}"
+        if [[ "${CERT_MODE:-}" == "cf" && -f "${INSTALL_DIR}/cf-token" ]]; then
+            mode="cf"
+        fi
+    fi
     CERT_MODE="${mode}"
 
     cat >"${INSTALL_DIR}/cert.env" <<EOF
@@ -1305,9 +1316,13 @@ EMAIL="${EMAIL}"
 EOF
     chmod 644 "${INSTALL_DIR}/cert.env"
 
-    if [[ "${mode}" == "cf" && -n "${CF_TOKEN}" ]]; then
-        printf '%s' "${CF_TOKEN}" >"${INSTALL_DIR}/cf-token"
-        chmod 600 "${INSTALL_DIR}/cf-token"
+    if [[ "${mode}" == "cf" ]]; then
+        if [[ -n "${CF_TOKEN}" ]]; then
+            printf '%s' "${CF_TOKEN}" >"${INSTALL_DIR}/cf-token"
+            chmod 600 "${INSTALL_DIR}/cf-token"
+        elif [[ ! -f "${INSTALL_DIR}/cf-token" ]]; then
+            warn "CF 证书模式但缺少 cf-token，自动续签可能失败"
+        fi
     else
         rm -f "${INSTALL_DIR}/cf-token"
     fi
@@ -1315,7 +1330,7 @@ EOF
 
 setup_cert_renewal() {
     log "正在配置 TLS 自动续签..."
-    install_tls_cert_files 2>/dev/null || true
+    install_tls_cert_files
     write_cert_meta
     setup_cron
     info "证书自动续签: 每天 03:00 / 15:00 检查，临近到期时自动续签"
