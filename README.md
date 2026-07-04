@@ -63,7 +63,8 @@ https://你的域名:8443/s/随机token/
 | 证书申请失败 | 检查 DNS 是否生效；CF 是否灰色云朵；Standalone 是否放了 80 端口 |
 | 证书会自动续签吗 | 会。每天 03:00/15:00 检查，临近到期自动续签；日志见 `/etc/stable-proxy-stack/renew.log` |
 | Clash 只导入 1 个节点 | 运行 `bash /etc/stable-proxy-stack/scripts/refresh-clash.sh` 更新配置后重新导入 |
-| 订阅页没有变化 / 样式仍是旧版 | 在 **VPS 上**执行：`bash /etc/stable-proxy-stack/scripts/refresh-panel.sh`（脚本会自动拉取最新 HTML 并刷新二维码） |
+| 订阅页没有变化 / 样式仍是旧版 | 在 **VPS 上**执行：`bash /etc/stable-proxy-stack/scripts/refresh-panel.sh` |
+| 更新脚本但不重装 | `bash /etc/stable-proxy-stack/scripts/update-stack.sh -y`（拉取最新 scripts 并刷新面板 + Clash） |
 | 只有 22 能连 | 去云厂商面板开防火墙，或改用 CF DNS 证书 |
 | 想先检查环境 | 命令末尾加 `--check-only` |
 | 重装 / 覆盖 | 脚本会提示确认；完全卸载见下方 |

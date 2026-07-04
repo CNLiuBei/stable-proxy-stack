@@ -1768,6 +1768,7 @@ fetch_asset "scripts/renew-hook.sh" "${INSTALL_DIR}/scripts/renew-hook.sh"
 fetch_asset "scripts/renew-cert.sh" "${INSTALL_DIR}/scripts/renew-cert.sh"
 fetch_asset "scripts/refresh-clash.sh" "${INSTALL_DIR}/scripts/refresh-clash.sh"
 fetch_asset "scripts/refresh-panel.sh" "${INSTALL_DIR}/scripts/refresh-panel.sh"
+fetch_asset "scripts/update-stack.sh" "${INSTALL_DIR}/scripts/update-stack.sh"
 fetch_asset "assets/index.html" "${WEB_ROOT}/index.html"
 
 write_singbox_config
