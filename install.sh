@@ -1260,7 +1260,11 @@ install_panel_cli() {
     local cli="${INSTALL_DIR}/scripts/show-panel.sh"
     [[ -f "${cli}" ]] || return 0
     chmod 755 "${cli}"
-    ln -sf "${cli}" /usr/local/bin/ifim-panel
+    cat >/usr/local/bin/ifim-panel <<EOF
+#!/usr/bin/env bash
+exec bash ${INSTALL_DIR}/scripts/show-panel.sh "\$@"
+EOF
+    chmod 755 /usr/local/bin/ifim-panel
     info "忘记订阅页地址时可运行: ifim-panel"
 }
 

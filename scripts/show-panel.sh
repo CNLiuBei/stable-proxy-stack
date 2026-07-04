@@ -2,7 +2,11 @@
 # 查询订阅网页地址（快捷命令: ifim-panel）
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_script="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+    _script="$(readlink -f "${_script}" 2>/dev/null || echo "${_script}")"
+fi
+SCRIPT_DIR="$(cd "$(dirname "${_script}")" && pwd)"
 # shellcheck source=scripts/common.env
 source "${SCRIPT_DIR}/common.env"
 

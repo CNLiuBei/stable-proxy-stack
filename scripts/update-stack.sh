@@ -99,7 +99,11 @@ fi
 
 if [[ -f "${INSTALL_DIR}/scripts/show-panel.sh" ]]; then
     chmod 755 "${INSTALL_DIR}/scripts/show-panel.sh"
-    ln -sf "${INSTALL_DIR}/scripts/show-panel.sh" /usr/local/bin/ifim-panel
+    cat >/usr/local/bin/ifim-panel <<EOF
+#!/usr/bin/env bash
+exec bash ${INSTALL_DIR}/scripts/show-panel.sh "\$@"
+EOF
+    chmod 755 /usr/local/bin/ifim-panel
 fi
 
 echo "脚本更新完成（${GITHUB_REPO}@${branch:0:7}）"
