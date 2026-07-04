@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.9"
+SCRIPT_VERSION="0.0.10"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -1645,8 +1645,9 @@ EOF
     chmod 600 "${INSTALL_DIR}/credentials.txt"
 
     cat >"${INSTALL_DIR}/clash-meta.yaml" <<EOF
+# Clash Meta / Mihomo profile — 含 Reality + Hysteria2 两个节点
 proxies:
-  - name: "reality-main"
+  - name: reality-main
     type: vless
     server: ${DOMAIN}
     port: 443
@@ -1660,23 +1661,28 @@ proxies:
       public-key: ${REALITY_PUB}
       short-id: 6ba85179e30d4fc2
     client-fingerprint: chrome
-  - name: "hy2-backup"
+  - name: hy2-backup
     type: hysteria2
     server: ${DOMAIN}
-    port: 443
     ports: 443-${HY2_PORT_END}
+    hop-interval: 30
     password: ${UUID}
     obfs: salamander
     obfs-password: ${OBFS_PASS}
     sni: ${DOMAIN}
-    alpn: [h3]
+    skip-cert-verify: false
+    alpn:
+      - h3
 
 proxy-groups:
-  - name: "稳定优先"
-    type: fallback
-    url: http://www.gstatic.com/generate_204
-    interval: 300
-    proxies: [reality-main, hy2-backup]
+  - name: stable-proxy
+    type: select
+    proxies:
+      - reality-main
+      - hy2-backup
+
+rules:
+  - MATCH,stable-proxy
 EOF
     chmod 600 "${INSTALL_DIR}/clash-meta.yaml"
 
@@ -1755,6 +1761,7 @@ fetch_asset "scripts/port-hopping.sh" "${INSTALL_DIR}/scripts/port-hopping.sh"
 fetch_asset "scripts/healthcheck.sh" "${INSTALL_DIR}/scripts/healthcheck.sh"
 fetch_asset "scripts/renew-hook.sh" "${INSTALL_DIR}/scripts/renew-hook.sh"
 fetch_asset "scripts/renew-cert.sh" "${INSTALL_DIR}/scripts/renew-cert.sh"
+fetch_asset "scripts/refresh-clash.sh" "${INSTALL_DIR}/scripts/refresh-clash.sh"
 fetch_asset "assets/index.html" "${WEB_ROOT}/index.html"
 
 write_singbox_config

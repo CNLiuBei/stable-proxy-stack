@@ -54,7 +54,7 @@
 
     <div class="card">
       <h2>📡 订阅链接（推荐）</h2>
-      <p style="font-size:.8rem;color:#94a3b8;margin-bottom:.5rem">一次导入 Reality + hy2 两个节点</p>
+      <p style="font-size:.8rem;color:#94a3b8;margin-bottom:.5rem">一次导入 Reality + hy2 两个节点（Clash 请在分组 stable-proxy 中查看）</p>
       <div class="link-box" id="sub-url"></div>
       <div class="qr" id="qr-sub"></div>
       <div class="btns">
@@ -147,14 +147,15 @@
       const sub = cfg.subUrl;
       const clash = cfg.clashUrl;
       fillBtns('import-sub-btns', [
-        ['Clash Meta', 'clash://install-config?url=' + encUrl(clash)],
+        ['Clash Meta', 'clash-meta://install-config?url=' + encUrl(clash)],
+        ['Clash Verge', 'clash://install-config?url=' + encUrl(clash)],
         ['v2rayNG', 'v2rayng://install-config?url=' + encUrl(sub)],
         ['Shadowrocket', 'shadowrocket://add/sub://' + b64Utf8(sub)],
         ['Sing-box', 'sing-box://import-remote-profile?url=' + encUrl(sub) + '#stable-proxy'],
         ['Hiddify', 'hiddify://import/?url=' + encUrl(sub)],
         ['NekoBox', 'sn://subscription?url=' + encUrl(sub)],
       ]);
-      document.getElementById('clash-open').href = 'clash://install-config?url=' + encUrl(clash);
+      document.getElementById('clash-open').href = 'clash-meta://install-config?url=' + encUrl(clash);
     }
 
     function renderNodeImports(boxId, link) {

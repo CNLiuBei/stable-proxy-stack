@@ -32,7 +32,7 @@ bash -c 'R=CNLiuBei/stable-proxy-stack; S=$(curl -fsSL https://api.github.com/re
 
 即使误用了旧缓存脚本，启动后也会**自动检测并升级到最新版**再安装。
 
-安装开始时会显示脚本版本（当前 **v0.0.9**）。
+安装开始时会显示脚本版本（当前 **v0.0.10**）。
 
 重装时若已有有效 TLS 证书（本机或 acme.sh），将自动复用，不会重复向 Let's Encrypt 申请。证书临近到期时，每天 **03:00 / 15:00** 自动续签并重载服务。
 
@@ -58,6 +58,7 @@ https://你的域名:8443/s/随机token/
 |------|------|
 | 证书申请失败 | 检查 DNS 是否生效；CF 是否灰色云朵；Standalone 是否放了 80 端口 |
 | 证书会自动续签吗 | 会。每天 03:00/15:00 检查，临近到期自动续签；日志见 `/etc/stable-proxy-stack/renew.log` |
+| Clash 只导入 1 个节点 | 运行 `bash /etc/stable-proxy-stack/scripts/refresh-clash.sh` 更新配置后重新导入 |
 | 只有 22 能连 | 去云厂商面板开防火墙，或改用 CF DNS 证书 |
 | 想先检查环境 | 命令末尾加 `--check-only` |
 | 重装 / 覆盖 | 脚本会提示确认；完全卸载见下方 |
