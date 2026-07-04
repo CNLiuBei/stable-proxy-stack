@@ -50,6 +50,8 @@ scripts=(
     common.env
     render-clash.sh
     refresh-clash.sh
+    regenerate-nodes.sh
+    show-panel.sh
     refresh-panel.sh
     healthcheck.sh
     renew-cert.sh
@@ -84,12 +86,20 @@ if [[ -n "${remote_ver}" ]]; then
     echo "远端版本: v${remote_ver}"
 fi
 
-if [[ "${REFRESH_PANEL}" == true && -f "${INSTALL_DIR}/scripts/refresh-panel.sh" ]]; then
-    bash "${INSTALL_DIR}/scripts/refresh-panel.sh"
+if [[ "${REFRESH_PANEL}" == true || "${REFRESH_CLASH}" == true ]]; then
+    if [[ -f "${INSTALL_DIR}/scripts/regenerate-nodes.sh" ]]; then
+        bash "${INSTALL_DIR}/scripts/regenerate-nodes.sh"
+    else
+        [[ "${REFRESH_CLASH}" == true && -f "${INSTALL_DIR}/scripts/refresh-clash.sh" ]] \
+            && bash "${INSTALL_DIR}/scripts/refresh-clash.sh"
+        [[ "${REFRESH_PANEL}" == true && -f "${INSTALL_DIR}/scripts/refresh-panel.sh" ]] \
+            && bash "${INSTALL_DIR}/scripts/refresh-panel.sh"
+    fi
 fi
 
-if [[ "${REFRESH_CLASH}" == true && -f "${INSTALL_DIR}/scripts/refresh-clash.sh" ]]; then
-    bash "${INSTALL_DIR}/scripts/refresh-clash.sh"
+if [[ -f "${INSTALL_DIR}/scripts/show-panel.sh" ]]; then
+    chmod 755 "${INSTALL_DIR}/scripts/show-panel.sh"
+    ln -sf "${INSTALL_DIR}/scripts/show-panel.sh" /usr/local/bin/ifim-panel
 fi
 
 echo "脚本更新完成（${GITHUB_REPO}@${branch:0:7}）"

@@ -19,7 +19,7 @@ source "${CREDS}"
 
 REALITY_DEST="${REALITY_DEST:-dl.google.com}"
 REALITY_SHORT_ID="${REALITY_SHORT_ID:-6ba85179e30d4fc2}"
-HY2_PORT_END="${HY2_PORT_END:-450}"
+PROXY_PORT="${PROXY_PORT:-443}"
 
 cat >"${INSTALL_DIR}/clash-meta.yaml" <<EOF
 # Clash Meta / Mihomo profile — 含 Reality + Hysteria2 两个节点
@@ -27,7 +27,7 @@ proxies:
   - name: reality-main
     type: vless
     server: ${DOMAIN}
-    port: 443
+    port: ${PROXY_PORT}
     uuid: ${UUID}
     network: tcp
     tls: true
@@ -41,8 +41,7 @@ proxies:
   - name: hy2-backup
     type: hysteria2
     server: ${DOMAIN}
-    ports: 443-${HY2_PORT_END}
-    hop-interval: 30
+    port: ${PROXY_PORT}
     password: ${UUID}
     obfs: salamander
     obfs-password: ${OBFS_PASSWORD}
@@ -65,4 +64,4 @@ EOF
 mkdir -p "${PANEL_DIR}"
 cp "${INSTALL_DIR}/clash-meta.yaml" "${PANEL_DIR}/clash.yaml"
 chmod 644 "${PANEL_DIR}/clash.yaml" "${INSTALL_DIR}/clash-meta.yaml"
-echo "已更新: ${PANEL_DIR}/clash.yaml（reality-main + hy2-backup）"
+echo "已更新: ${PANEL_DIR}/clash.yaml（reality-main + hy2-backup，端口 ${PROXY_PORT}）"

@@ -396,7 +396,7 @@
               <h2>Reality</h2>
               <span class="pill accent">推荐</span>
             </div>
-            <p class="hint">VLESS · Reality · Vision · TCP 443</p>
+            <p class="hint" id="reality-hint">VLESS · Reality · Vision</p>
           </div>
           <div class="link-group">
             <div class="link-box" id="reality-link"></div>
@@ -420,7 +420,7 @@
               <h2>Hysteria2</h2>
               <span class="pill">备用</span>
             </div>
-            <p class="hint">Hysteria2 · obfs · UDP 443</p>
+            <p class="hint" id="hy2-hint">Hysteria2 · obfs</p>
           </div>
           <div class="link-group">
             <div class="link-box" id="hy2-link"></div>
@@ -442,7 +442,7 @@
   <div class="toast" id="toast">已拷贝</div>
 
   <script>
-    const INLINE_CFG = {"domain":"demo.example.com","subUrl":"https://demo.example.com:8443/s/demo-token-abc123/sub","clashUrl":"https://demo.example.com:8443/s/demo-token-abc123/clash","realityLink":"vless://00000000-0000-0000-0000-000000000001@demo.example.com:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=DemoPublicKey&sid=abcd1234&type=tcp#IFIM-Reality","hy2Link":"hysteria2://demo-password@demo.example.com:443?obfs=salamander&obfs-password=demo-obfs&sni=demo.example.com&insecure=0#IFIM-Hysteria2","created":"2026-07-04 07:29 UTC","version":"2026.07.04+02efddd"};
+    const INLINE_CFG = {"domain":"demo.example.com","subUrl":"https://demo.example.com:8443/s/demo-token-abc123/sub","clashUrl":"https://demo.example.com:8443/s/demo-token-abc123/clash","realityLink":"vless://00000000-0000-0000-0000-000000000001@demo.example.com:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=DemoPublicKey&sid=abcd1234&type=tcp#IFIM-Reality","hy2Link":"hysteria2://demo-password@demo.example.com:443?obfs=salamander&obfs-password=demo-obfs&sni=demo.example.com&insecure=0#IFIM-Hysteria2","proxyPort":443,"created":"2026-07-04 07:29 UTC","version":"2026.07.04+02efddd"};
     const BUILT_VERSION = '2026.07.04+02efddd';
     let cfg = {};
 
@@ -518,10 +518,15 @@
 
     function renderPanel(data) {
       cfg = data;
+      const port = data.proxyPort || 443;
       const ver = panelVersion(data);
       document.getElementById('version-label').textContent = ver ? '版本 ' + ver : '';
       document.getElementById('domain-label').innerHTML =
         '<strong>' + data.domain + '</strong> · ' + (data.created || '');
+      document.getElementById('reality-hint').textContent =
+        'VLESS · Reality · Vision · TCP ' + port;
+      document.getElementById('hy2-hint').textContent =
+        'Hysteria2 · obfs · UDP ' + port;
       document.getElementById('sub-url').textContent = data.subUrl;
       document.getElementById('reality-link').textContent = data.realityLink;
       document.getElementById('hy2-link').textContent = data.hy2Link;

@@ -48,7 +48,8 @@ GITHUB_REPO="${GITHUB_REPO:-CNLiuBei/IFIM-Proxy}"
 REPO_BASE="${REPO_BASE:-https://raw.githubusercontent.com/${GITHUB_REPO}/main}"
 REALITY_DEST="${REALITY_DEST:-dl.google.com}"
 REALITY_SHORT_ID="${REALITY_SHORT_ID:-6ba85179e30d4fc2}"
-HY2_PORT_END="${HY2_PORT_END:-450}"
+PROXY_PORT="${PROXY_PORT:-443}"
+PROXY_PORT_CLI=false
 SING_BOX_VERSION="${SING_BOX_VERSION:-1.13.14}"
 
 RED='\033[0;31m'
@@ -222,7 +223,7 @@ usage() {
   --email EMAIL         ACME 邮箱（默认 admin@域名）
   --cf-token TOKEN      Cloudflare API Token（DNS 证书，跳过 CF 询问）
   --reality-dest HOST   Reality 伪装目标（默认 dl.google.com）
-  --hy2-port-end PORT   hy2 UDP 端口跳跃上限（默认 450，须 >= 444）
+  --port PORT           代理端口，Reality(TCP) 与 Hy2(UDP) 共用（默认 443）
   --sing-box-version V  sing-box 版本（默认 1.13.14）
   --reset-firewall      安装时重置 UFW 规则（默认仅增量添加）
   --check-only          仅环境预检，不安装
@@ -235,9 +236,16 @@ usage() {
 示例:
   bash install.sh
   bash install.sh --domain jp.example.com --email admin@example.com
+  bash install.sh --domain jp.example.com --port 443 -y
   bash install.sh --domain jp.example.com --cf-token YOUR_CF_TOKEN -y
   bash install.sh --domain jp.example.com --check-only
 EOF
+}
+
+validate_proxy_port() {
+    local p="$1"
+    [[ "${p}" =~ ^[0-9]+$ ]] || return 1
+    (( p >= 1 && p <= 65535 ))
 }
 
 while [[ $# -gt 0 ]]; do
@@ -246,7 +254,7 @@ while [[ $# -gt 0 ]]; do
         --email) EMAIL="$2"; shift 2 ;;
         --cf-token) CF_TOKEN="$2"; shift 2 ;;
         --reality-dest) REALITY_DEST="$2"; shift 2 ;;
-        --hy2-port-end) HY2_PORT_END="$2"; shift 2 ;;
+        --port) PROXY_PORT="$2"; PROXY_PORT_CLI=true; shift 2 ;;
         --sing-box-version) SING_BOX_VERSION="$2"; shift 2 ;;
         --reset-firewall) RESET_FIREWALL=true; shift ;;
         --check-only) CHECK_ONLY=true; shift ;;
@@ -259,8 +267,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "${HY2_PORT_END}" -lt 444 ]]; then
-    err "--hy2-port-end 须 >= 444（当前: ${HY2_PORT_END}）"
+if ! validate_proxy_port "${PROXY_PORT}"; then
+    err "--port 无效（须为 1-65535，当前: ${PROXY_PORT}）"
 fi
 
 prompt_yes_no() {
@@ -737,6 +745,38 @@ prompt_acme_email() {
     info "ACME 邮箱: ${EMAIL}"
 }
 
+prompt_proxy_port() {
+    if [[ "${PROXY_PORT_CLI}" == true ]]; then
+        info "代理端口: ${PROXY_PORT}（Reality TCP + Hy2 UDP 共用）"
+        return 0
+    fi
+    if [[ "${ASSUME_YES}" == true ]]; then
+        info "代理端口: ${PROXY_PORT}（默认，非交互模式）"
+        return 0
+    fi
+
+    echo
+    echo -e "${BOLD}--- 步骤 5: 代理端口 ---${NC}"
+    info "VLESS Reality（TCP）与 Hysteria2（UDP）共用同一端口，默认 443"
+    info "非 443 时请在云防火墙同步放行该端口的 TCP/UDP"
+
+    local input tty="/dev/tty"
+    while true; do
+        if [[ -r "${tty}" ]]; then
+            read -r -p "代理端口 [443]: " input <"${tty}"
+        else
+            read -r -p "代理端口 [443]: " input
+        fi
+        input="${input:-443}"
+        if validate_proxy_port "${input}"; then
+            PROXY_PORT="${input}"
+            break
+        fi
+        warn "端口无效，请输入 1-65535 之间的数字"
+    done
+    info "代理端口: ${PROXY_PORT}"
+}
+
 print_config_summary() {
     local cert_label dns_label action_label
     if [[ -n "${CF_TOKEN}" ]]; then
@@ -762,6 +802,7 @@ print_config_summary() {
     echo "  DNS 就绪: ${dns_label}"
     echo "  证书方式: ${cert_label}"
     echo "  ACME 邮箱: ${EMAIL}"
+    echo "  代理端口: ${PROXY_PORT}（TCP Reality + UDP Hy2）"
     echo "  操作:     ${action_label}"
     echo
 }
@@ -794,6 +835,7 @@ prompt_install_options() {
     check_dns_anomalies
     prompt_cert_method
     prompt_acme_email
+    prompt_proxy_port
     confirm_proceed
 }
 
@@ -982,7 +1024,7 @@ ensure_firewall_ports() {
             ufw default allow outgoing >/dev/null 2>&1 || true
         fi
 
-        for spec in "22/tcp" "80/tcp" "443/tcp" "443/udp" "8443/tcp"; do
+        for spec in "22/tcp" "80/tcp" "${PROXY_PORT}/tcp" "${PROXY_PORT}/udp" "8443/tcp"; do
             port="${spec%/*}"
             proto="${spec#*/}"
             if ufw_port_allowed "${port}" "${proto}"; then
@@ -996,26 +1038,14 @@ ensure_firewall_ports() {
             fi
         done
 
-        for p in $(seq 444 "${HY2_PORT_END}"); do
-            if ufw_port_allowed "${p}" udp; then
-                opened=$((opened + 1))
-            else
-                ufw allow "${p}/udp" >/dev/null 2>&1 || true
-                added=$((added + 1))
-            fi
-        done
-
         ufw --force enable >/dev/null 2>&1 || true
         log "本机 UFW 就绪（已有 ${opened} 条，新增 ${added} 条）"
     else
         warn "未安装 ufw，尝试 iptables 放行..."
-        for spec in "22/tcp" "80/tcp" "443/tcp" "443/udp" "8443/tcp"; do
+        for spec in "22/tcp" "80/tcp" "${PROXY_PORT}/tcp" "${PROXY_PORT}/udp" "8443/tcp"; do
             port="${spec%/*}"
             proto="${spec#*/}"
             iptables_allow_port "${port}" "${proto}"
-        done
-        for p in $(seq 444 "${HY2_PORT_END}"); do
-            iptables_allow_port "${p}" udp
         done
         log "iptables 规则已更新"
     fi
@@ -1142,7 +1172,7 @@ run_preflight() {
     fi
 
     # local port conflicts
-    for spec in "443/tcp" "80/tcp"; do
+    for spec in "${PROXY_PORT}/tcp" "${PROXY_PORT}/udp" "80/tcp"; do
         local p="${spec%/*}" proto="${spec#*/}"
         if port_in_use "${p}" "${proto}"; then
             add_warn "端口 ${p}/${proto} 已被占用（安装时将重新配置）"
@@ -1172,7 +1202,7 @@ run_preflight() {
     fi
 
     # required ports list
-    info "所需端口: 22/tcp 80/tcp 443/tcp 443/udp 8443/tcp 444-${HY2_PORT_END}/udp"
+    info "所需端口: 22/tcp 80/tcp ${PROXY_PORT}/tcp ${PROXY_PORT}/udp 8443/tcp"
 
     # download tools
     if command -v curl >/dev/null 2>&1; then
@@ -1226,6 +1256,14 @@ run_preflight() {
     return 0
 }
 
+install_panel_cli() {
+    local cli="${INSTALL_DIR}/scripts/show-panel.sh"
+    [[ -f "${cli}" ]] || return 0
+    chmod 755 "${cli}"
+    ln -sf "${cli}" /usr/local/bin/ifim-panel
+    info "忘记订阅页地址时可运行: ifim-panel"
+}
+
 fetch_asset() {
     local rel_path="$1"
     local dest_path="$2"
@@ -1258,6 +1296,7 @@ net.core.rmem_default = 8388608
 net.core.wmem_default = 8388608
 net.ipv4.udp_rmem_min = 65536
 net.ipv4.udp_wmem_min = 65536
+net.ipv4.conf.all.route_localnet = 1
 net.core.netdev_max_backlog = 250000
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
@@ -1463,7 +1502,7 @@ write_singbox_config() {
     {
       "type": "hysteria2",
       "listen": "::",
-      "listen_port": 443,
+      "listen_port": ${PROXY_PORT},
       "ignore_client_bandwidth": true,
       "obfs": { "type": "salamander", "password": "${OBFS_PASS}" },
       "users": [{ "name": "hy2-backup", "password": "${UUID}" }],
@@ -1483,7 +1522,7 @@ write_singbox_config() {
     {
       "type": "vless",
       "listen": "::",
-      "listen_port": 443,
+      "listen_port": ${PROXY_PORT},
       "tag": "VLESSReality",
       "users": [{
         "name": "reality-main",
@@ -1648,6 +1687,7 @@ generate_subscribe_web() {
   "clashUrl": "${clash_url}",
   "realityLink": "${REALITY_LINK}",
   "hy2Link": "${HY2_LINK}",
+  "proxyPort": ${PROXY_PORT},
   "created": "$(date -u +"%Y-%m-%d %H:%M UTC")",
   "version": "${SCRIPT_VERSION}"
 }
@@ -1699,32 +1739,18 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-    cat >/etc/systemd/system/stable-proxy-port-hopping.service <<EOF
-[Unit]
-Description=stable-proxy UDP port hopping
-After=network.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=${INSTALL_DIR}/scripts/port-hopping.sh 443 443 ${HY2_PORT_END}
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
     systemctl daemon-reload
-    systemctl enable sing-box stable-proxy-port-hopping nginx
+    systemctl enable sing-box nginx
     systemctl restart nginx
     systemctl restart sing-box
-    systemctl start stable-proxy-port-hopping 2>/dev/null \
-        || "${INSTALL_DIR}/scripts/port-hopping.sh" 443 443 "${HY2_PORT_END}" || true
 }
 
-apply_port_hopping() {
-    log "正在配置 UDP 端口跳跃..."
-    systemctl start stable-proxy-port-hopping 2>/dev/null \
-        || "${INSTALL_DIR}/scripts/port-hopping.sh" 443 443 "${HY2_PORT_END}" || true
+disable_port_hopping() {
+    if [[ -x "${INSTALL_DIR}/scripts/port-hopping.sh" ]]; then
+        bash "${INSTALL_DIR}/scripts/port-hopping.sh" --disable 2>/dev/null || true
+    elif [[ -f "${INSTALL_DIR}/scripts/port-hopping.sh" ]]; then
+        bash "${INSTALL_DIR}/scripts/port-hopping.sh" --disable 2>/dev/null || true
+    fi
 }
 
 setup_firewall() {
@@ -1750,14 +1776,14 @@ verify_install() {
     log "正在验证安装结果..."
 
     for i in $(seq 1 10); do
-        if ss -tlnpH 'sport = :443' 2>/dev/null | grep -q sing-box \
-            && ss -ulnpH 'sport = :443' 2>/dev/null | grep -q sing-box; then
+        if ss -tlnpH "sport = :${PROXY_PORT}" 2>/dev/null | grep -q sing-box \
+            && ss -ulnpH "sport = :${PROXY_PORT}" 2>/dev/null | grep -q sing-box; then
             break
         fi
         [[ ${i} -eq 10 ]] || sleep 1
     done
 
-    for svc in sing-box nginx stable-proxy-port-hopping; do
+    for svc in sing-box nginx; do
         if systemctl is-active --quiet "${svc}"; then
             info "服务 ${svc}: 运行中"
         else
@@ -1765,16 +1791,16 @@ verify_install() {
             ok=false
         fi
     done
-    if ss -tlnpH 'sport = :443' 2>/dev/null | grep -q sing-box; then
-        info "TCP 443 (Reality): 监听正常"
+    if ss -tlnpH "sport = :${PROXY_PORT}" 2>/dev/null | grep -q sing-box; then
+        info "TCP ${PROXY_PORT} (Reality): 监听正常"
     else
-        fail "TCP 443 (Reality): 未监听"
+        fail "TCP ${PROXY_PORT} (Reality): 未监听"
         ok=false
     fi
-    if ss -ulnpH 'sport = :443' 2>/dev/null | grep -q sing-box; then
-        info "UDP 443 (hy2): 监听正常"
+    if ss -ulnpH "sport = :${PROXY_PORT}" 2>/dev/null | grep -q sing-box; then
+        info "UDP ${PROXY_PORT} (hy2): 监听正常"
     else
-        fail "UDP 443 (hy2): 未监听"
+        fail "UDP ${PROXY_PORT} (hy2): 未监听"
         ok=false
     fi
     if [[ -f "${INSTALL_DIR}/tls/${DOMAIN}.crt" ]]; then
@@ -1793,8 +1819,8 @@ verify_install() {
 }
 
 print_links() {
-    REALITY_LINK="vless://${UUID}@${DOMAIN}:443?encryption=none&security=reality&type=tcp&sni=${REALITY_DEST}&fp=chrome&pbk=${REALITY_PUB}&sid=${REALITY_SHORT_ID}&flow=xtls-rprx-vision#reality-main"
-    HY2_LINK="hysteria2://${UUID}@${DOMAIN}:443?obfs=salamander&obfs-password=${OBFS_PASS}&mport=443-${HY2_PORT_END}&peer=${DOMAIN}&insecure=0&sni=${DOMAIN}&alpn=h3#hy2-backup"
+    REALITY_LINK="vless://${UUID}@${DOMAIN}:${PROXY_PORT}?encryption=none&security=reality&type=tcp&sni=${REALITY_DEST}&fp=chrome&pbk=${REALITY_PUB}&sid=${REALITY_SHORT_ID}&flow=xtls-rprx-vision#reality-main"
+    HY2_LINK="hysteria2://${UUID}@${DOMAIN}:${PROXY_PORT}?obfs=salamander&obfs-password=${OBFS_PASS}&peer=${DOMAIN}&insecure=0&sni=${DOMAIN}&alpn=h3#hy2-backup"
 
     cat >"${INSTALL_DIR}/subscribe.txt" <<EOF
 # IFIM-Proxy
@@ -1804,7 +1830,7 @@ print_links() {
 # [主力·稳定] VLESS + Reality + Vision
 ${REALITY_LINK}
 
-# [备用·速度] Hysteria2 + obfs + 端口跳跃
+# [备用·速度] Hysteria2 + obfs · UDP ${PROXY_PORT}
 ${HY2_LINK}
 EOF
     chmod 600 "${INSTALL_DIR}/subscribe.txt"
@@ -1816,7 +1842,7 @@ OBFS_PASSWORD=${OBFS_PASS}
 REALITY_PUBLIC_KEY=${REALITY_PUB}
 REALITY_DEST=${REALITY_DEST}
 REALITY_SHORT_ID=${REALITY_SHORT_ID}
-HY2_PORT_END=${HY2_PORT_END}
+PROXY_PORT=${PROXY_PORT}
 SERVER_IPV4=${PUBLIC_IPV4:-unknown}
 EOF
     chmod 600 "${INSTALL_DIR}/credentials.txt"
@@ -1839,6 +1865,7 @@ EOF
     echo "  订阅网页: ${PANEL_URL}"
     echo
     echo "  配置目录: ${INSTALL_DIR}/"
+    echo "  查订阅页: ifim-panel"
     echo "============================================================"
 
     if [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] && command -v xdg-open >/dev/null 2>&1; then
@@ -1905,13 +1932,17 @@ fetch_asset "scripts/refresh-clash.sh" "${INSTALL_DIR}/scripts/refresh-clash.sh"
 fetch_asset "scripts/refresh-panel.sh" "${INSTALL_DIR}/scripts/refresh-panel.sh"
 fetch_asset "scripts/update-stack.sh" "${INSTALL_DIR}/scripts/update-stack.sh"
 fetch_asset "scripts/sync-version.sh" "${INSTALL_DIR}/scripts/sync-version.sh"
+fetch_asset "scripts/regenerate-nodes.sh" "${INSTALL_DIR}/scripts/regenerate-nodes.sh"
+fetch_asset "scripts/show-panel.sh" "${INSTALL_DIR}/scripts/show-panel.sh"
 fetch_asset "assets/index.html" "${WEB_ROOT}/index.html"
+
+install_panel_cli
 
 write_singbox_config
 setup_nginx
 setup_firewall
 setup_systemd
 setup_cert_renewal
-apply_port_hopping
+disable_port_hopping
 verify_install
 print_links

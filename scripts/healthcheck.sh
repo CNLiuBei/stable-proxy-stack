@@ -7,6 +7,13 @@ source "${SCRIPT_DIR}/common.env"
 
 STAMP="/run/stable-proxy-healthcheck.stamp"
 COOLDOWN=900
+PROXY_PORT=443
+
+if [[ -f "${INSTALL_DIR}/credentials.txt" ]]; then
+    # shellcheck source=/dev/null
+    source "${INSTALL_DIR}/credentials.txt"
+    PROXY_PORT="${PROXY_PORT:-443}"
+fi
 
 if [[ -f "${STAMP}" ]]; then
     last=$(stat -c %Y "${STAMP}" 2>/dev/null || stat -f %m "${STAMP}" 2>/dev/null || echo 0)
@@ -19,7 +26,7 @@ fi
 needs_restart=false
 if ! systemctl is-active --quiet sing-box.service; then
     needs_restart=true
-elif ! ss -tlnpH 'sport = :443' 2>/dev/null | grep -q sing-box; then
+elif ! ss -tlnpH "sport = :${PROXY_PORT}" 2>/dev/null | grep -q sing-box; then
     needs_restart=true
 fi
 

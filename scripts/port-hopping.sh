@@ -1,21 +1,32 @@
 #!/bin/bash
+# 移除旧版 Hy2 UDP 端口跳跃规则（现改为固定 443，不再使用跳跃）
 set -euo pipefail
 
-TARGET_PORT="${1:-443}"
-START_PORT="${2:-443}"
-END_PORT="${3:-450}"
 COMMENT="stable-proxy_hy2_portHopping"
 
-while iptables -t nat -L PREROUTING -n --line-numbers 2>/dev/null | grep -q "${COMMENT}"; do
-    LINE=$(iptables -t nat -L PREROUTING -n --line-numbers | grep "${COMMENT}" | head -1 | awk '{print $1}')
-    iptables -t nat -D PREROUTING "${LINE}"
-done
+disable_port_hopping() {
+    while iptables -t nat -L PREROUTING -n --line-numbers 2>/dev/null | grep -q "${COMMENT}"; do
+        LINE=$(iptables -t nat -L PREROUTING -n --line-numbers | grep "${COMMENT}" | head -1 | awk '{print $1}')
+        iptables -t nat -D PREROUTING "${LINE}"
+    done
 
-if ! iptables -t nat -A PREROUTING -p udp --dport "${START_PORT}:${END_PORT}" \
-    -m comment --comment "${COMMENT}" \
-    -j DNAT --to-destination "127.0.0.1:${TARGET_PORT}" 2>/dev/null; then
-    iptables -t nat -A PREROUTING -p udp --dport "${START_PORT}:${END_PORT}" \
-        -j DNAT --to-destination "127.0.0.1:${TARGET_PORT}"
-fi
+    if systemctl is-enabled stable-proxy-port-hopping.service >/dev/null 2>&1 \
+        || systemctl is-active stable-proxy-port-hopping.service >/dev/null 2>&1; then
+        systemctl disable --now stable-proxy-port-hopping.service 2>/dev/null || true
+    fi
+    rm -f /etc/systemd/system/stable-proxy-port-hopping.service
+    systemctl daemon-reload 2>/dev/null || true
 
-echo "Port hopping: UDP ${START_PORT}-${END_PORT} -> 127.0.0.1:${TARGET_PORT}"
+    echo "Hy2 端口跳跃已禁用（固定 UDP 443）"
+}
+
+case "${1:-}" in
+    --disable|disable) disable_port_hopping ;;
+    -h|--help)
+        echo "用法: bash port-hopping.sh [--disable]"
+        echo "  --disable  移除 iptables 跳跃规则并停用相关 systemd 服务"
+        ;;
+    *)
+        disable_port_hopping
+        ;;
+esac

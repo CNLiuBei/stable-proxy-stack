@@ -58,6 +58,13 @@ if [[ -n "${script_version}" ]]; then
     mv "${tmp_cfg}" "${PANEL_DIR}/config.json"
 fi
 
+# 补全 proxyPort（旧 config 可能没有）
+if ! jq -e '.proxyPort' "${PANEL_DIR}/config.json" >/dev/null 2>&1; then
+    tmp_cfg=$(mktemp)
+    jq --argjson pp 443 '. + {proxyPort: $pp}' "${PANEL_DIR}/config.json" >"${tmp_cfg}"
+    mv "${tmp_cfg}" "${PANEL_DIR}/config.json"
+fi
+
 python3 - "${PANEL_DIR}/config.json" "${PANEL_DIR}/index.html" "${script_version:-}" <<'PY'
 import json, pathlib, sys
 cfg_path, html_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
