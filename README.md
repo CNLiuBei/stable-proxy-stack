@@ -30,7 +30,7 @@ apt-get update && apt-get install -y curl wget ca-certificates && \
 curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash
 ```
 
-按中文提示操作即可：输入域名 → 确认 DNS → 选证书方式 → 确认安装。
+按中文提示操作：输入域名 → 自动检测 DNS → 选证书方式 → 确认安装。
 
 ---
 

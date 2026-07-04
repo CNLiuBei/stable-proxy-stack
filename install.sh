@@ -251,15 +251,11 @@ check_dns_anomalies() {
     for ip in "${_dns_check[@]}"; do
         if is_cloudflare_proxy_ip "${ip}"; then
             cf_proxy=true
-            warn "DNS 指向 Cloudflare 代理 IP（${ip}），域名可能开启了橙色云"
+            warn "DNS 指向 Cloudflare 代理 IP（${ip}），域名开启了橙色云"
         fi
     done
     if [[ "${cf_proxy}" == true ]]; then
-        warn "申请证书前请在 Cloudflare 改为灰色云朵（仅 DNS）"
-        if [[ "${ASSUME_YES}" == false ]]; then
-            prompt_yes_no "已关闭橙色云 / 确认使用灰色云朵？" "n" \
-                || err "请先在 Cloudflare 关闭代理（灰色云朵）后重试"
-        fi
+        err "请先在 Cloudflare 关闭橙色云，改为灰色云朵（仅 DNS）后重试"
     fi
 }
 
@@ -276,13 +272,12 @@ check_existing_install() {
     fi
 }
 
-confirm_server_ip() {
-    [[ "${ASSUME_YES}" == true ]] && return 0
-    [[ -z "${PUBLIC_IPV4:-}" ]] && return 0
-    echo
-    info "检测到本机公网 IPv4: ${PUBLIC_IPV4}"
-    prompt_yes_no "请确认: 这是当前 VPS 的公网 IP，且 DNS A 记录应指向此 IP？" "y" \
-        || err "请核对 VPS 控制面板中的 IP 与 DNS 配置后重试"
+show_public_ip() {
+    if [[ -n "${PUBLIC_IPV4:-}" ]]; then
+        info "本机公网 IPv4: ${PUBLIC_IPV4}"
+    else
+        warn "无法获取本机公网 IPv4"
+    fi
 }
 
 validate_cf_token() {
@@ -394,11 +389,11 @@ show_welcome() {
         echo -e "  ${CYAN}模式:${NC} 完整安装"
     fi
     echo
-    echo "  接下来将询问:"
-    echo "    1. 域名（含格式校验与二次确认）"
-    echo "    2. 本机 IP 与 DNS 是否已解析"
-    echo "    3. 证书申请方式（含 CF Token 在线验证）"
-    echo "    4. ACME 邮箱"
+    echo "  接下来将:"
+    echo "    1. 输入域名（含格式校验）"
+    echo "    2. 自动检测 DNS A 记录是否指向本机"
+    echo "    3. 选择证书申请方式"
+    echo "    4. 输入 ACME 邮箱"
     echo
     echo "  防呆机制: 橙色云检测 / 80 端口拦截 / 覆盖安装确认"
     echo
@@ -475,43 +470,39 @@ prompt_domain() {
     done
 }
 
-prompt_dns_confirmation() {
-    local dns_default="n"
-    dns_matches_server && dns_default="y"
+auto_check_dns() {
+    local attempt max_attempts=3 wait_sec=15
 
     echo
-    echo -e "${BOLD}--- 步骤 2: DNS 解析 ---${NC}"
-    if [[ -n "${PUBLIC_IPV4:-}" ]]; then
-        echo "  若尚未配置，请在 DNS 服务商添加 A 记录:"
-        echo -e "  ${GREEN}${DOMAIN}${NC}  →  ${GREEN}${PUBLIC_IPV4}${NC}"
-        echo
-    fi
+    echo -e "${BOLD}--- 步骤 2: DNS 自动检测 ---${NC}"
 
-    show_dns_status || true
-
-    echo
-    if [[ "${ASSUME_YES}" == true ]]; then
-        if [[ "${dns_default}" == "y" ]]; then
-            DNS_CONFIRMED=true
-        else
-            DNS_CONFIRMED=false
-        fi
-        info "已跳过 DNS 确认（-y），预检阶段将再次校验"
-        return
-    fi
-
-    if prompt_yes_no "域名 A 记录是否已指向本服务器？" "${dns_default}"; then
-        DNS_CONFIRMED=true
-        info "DNS: 用户已确认解析完成"
-    else
+    if [[ -z "${PUBLIC_IPV4:-}" ]]; then
         DNS_CONFIRMED=false
-        warn "请先添加: ${DOMAIN} A → ${PUBLIC_IPV4:-本机IP}"
-        if prompt_yes_no "仍要继续？（证书申请可能失败）" "n"; then
-            warn "在未确认 DNS 的情况下继续"
-        else
-            err "请先配置 DNS，然后重新运行: bash install.sh"
-        fi
+        err "无法获取本机公网 IP，不能自动校验 DNS"
     fi
+
+    echo "  需要: ${DOMAIN}  A  →  ${PUBLIC_IPV4}"
+    echo
+
+    for attempt in $(seq 1 "${max_attempts}"); do
+        show_dns_status || true
+        if dns_matches_server; then
+            DNS_CONFIRMED=true
+            log "DNS 自动检测通过"
+            return 0
+        fi
+        if [[ ${attempt} -lt ${max_attempts} ]]; then
+            warn "DNS 未指向本机，${wait_sec} 秒后重试 (${attempt}/${max_attempts})..."
+            sleep "${wait_sec}"
+        fi
+    done
+
+    DNS_CONFIRMED=false
+    mapfile -t _fail_dns < <(resolve_dns A || true)
+    if [[ ${#_fail_dns[@]} -eq 0 ]]; then
+        err "DNS 检测失败: 未找到 ${DOMAIN} 的 A 记录。请添加 ${DOMAIN} A → ${PUBLIC_IPV4} 后重试"
+    fi
+    err "DNS 检测失败: 当前 A 记录 (${_fail_dns[*]}) ≠ 本机 IP (${PUBLIC_IPV4})"
 }
 
 prompt_cert_method() {
@@ -652,10 +643,10 @@ prompt_install_options() {
     echo -e "${BOLD}--- 步骤 1: 域名 ---${NC}"
     PUBLIC_IPV4=$(get_public_ipv4)
     prompt_domain
-    confirm_server_ip
+    show_public_ip
     ensure_dns_lookup
 
-    prompt_dns_confirmation
+    auto_check_dns
     check_dns_anomalies
     prompt_cert_method
     prompt_acme_email
