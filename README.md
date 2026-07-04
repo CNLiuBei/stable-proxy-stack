@@ -84,6 +84,17 @@ curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/in
 
 检查项包括：root 权限、系统/架构、内存磁盘、curl/wget、域名 A 记录是否指向本机、端口占用、证书模式、sing-box 是否可下载。
 
+**防呆设计**（交互模式）：
+
+| 环节 | 机制 |
+|------|------|
+| 域名 | 格式校验、常见后缀拼写提示（.con→.com）、安装前二次输入确认 |
+| IP | 显示公网 IP 并要求用户确认 |
+| DNS | 自动比对 A 记录；检测 Cloudflare 橙色云并提示改灰色云朵 |
+| 证书 | CF Token 在线验证 + Zone 检查；Standalone 模式检测 80 端口，不通则引导改 CF |
+| 重装 | 检测已有安装，覆盖前需确认 |
+| 失败 | 安装出错时输出常见原因与回滚命令 |
+
 ### 非交互式安装（脚本/CI 用）
 
 **Standalone**（需放行 **80/tcp**）：
