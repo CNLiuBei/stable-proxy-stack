@@ -20,7 +20,21 @@ UDP 443-450 → 端口跳跃（hy2 备用）
 - 域名已解析到 VPS IP
 - 开放端口：22, 80, 443/tcp, 443/udp, 8443, 444-450/udp
 
+> **极简镜像说明**：部分 VPS 出厂未预装 `curl`。脚本会在预检前通过 `apt` 自动安装 `curl` / `wget`（需 root）。若系统既无 curl 又无 wget 且无法使用 apt，请先手动安装后再运行，或改用下方「克隆仓库」方式。
+
 ## 一键安装
+
+### 部署前检查（推荐先跑）
+
+在**你的电脑**上执行（管道里的 `curl` 是本地客户端，用于把脚本下载到 VPS 执行）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
+  --domain your.domain.com \
+  --check-only
+```
+
+检查项包括：root 权限、系统/架构、内存磁盘、**curl/wget 可用性**、**域名 A 记录是否指向本机**、端口占用、证书模式提示、sing-box 是否可下载。
 
 ### 方式一：Standalone 模式（域名已指向 VPS，自动申请证书）
 
@@ -30,7 +44,9 @@ curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/in
   --email admin@your.domain.com
 ```
 
-### 方式二：Cloudflare DNS 验证（推荐，无需停 nginx）
+> **注意**：需在云厂商防火墙放行 **80/tcp**（证书验证）及 443/8443 等端口。Vultr 默认可能只开 22。
+
+### 方式二：Cloudflare DNS 验证（推荐，无需开放 80 端口）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh | bash -s -- \
@@ -39,14 +55,17 @@ curl -fsSL https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/in
   --cf-token YOUR_CLOUDFLARE_API_TOKEN
 ```
 
-### 方式三：克隆仓库后安装
+### 方式三：克隆仓库后安装（VPS 上无 curl 时推荐）
 
 ```bash
+apt-get update && apt-get install -y git
 git clone https://github.com/CNLiuBei/stable-proxy-stack.git
 cd stable-proxy-stack
 chmod +x install.sh
 bash install.sh --domain your.domain.com --email admin@your.domain.com
 ```
+
+脚本会自动检测并安装缺失的 `curl` / `wget`，无需在 VPS 上预先安装 curl。
 
 ## 安装参数
 
@@ -54,7 +73,10 @@ bash install.sh --domain your.domain.com --email admin@your.domain.com
 |------|------|------|
 | `--domain` | ✅ | 你的域名 |
 | `--email` | ❌ | ACME 邮箱，默认 `admin@域名` |
-| `--cf-token` | ❌ | Cloudflare API Token（DNS 验证） |
+| `--cf-token` | ❌ | Cloudflare API Token（DNS 验证，无需 80 端口） |
+| `--check-only` | ❌ | 仅运行环境检查，不安装 |
+| `--skip-check` | ❌ | 跳过预检（不推荐） |
+| `-y, --yes` | ❌ | 有警告时自动继续 |
 | `--reality-dest` | ❌ | Reality 伪装目标，默认 `dl.google.com` |
 | `--hy2-port-end` | ❌ | UDP 端口跳跃上限，默认 `450` |
 | `--sing-box-version` | ❌ | sing-box 版本，默认 `1.13.14` |
@@ -64,8 +86,9 @@ bash install.sh --domain your.domain.com --email admin@your.domain.com
 配置文件与订阅链接保存在：
 
 ```
+/etc/stable-proxy-stack/subscribe.txt       # 节点链接
 /etc/stable-proxy-stack/credentials.txt   # 密钥信息
-/etc/stable-proxy-stack/subscribe.txt     # 节点链接
+/etc/stable-proxy-stack/clash-meta.yaml   # Clash Meta 配置片段
 ```
 
 ### 客户端建议
@@ -89,7 +112,9 @@ proxy-groups:
 
 ## 包含的优化
 
-- [x] Reality TCP 443 主力
+- [x] 部署前环境检查（DNS/端口/系统/curl-wget）
+- [x] 极简镜像自动安装 curl/wget
+- [x] VLESS + Reality + Vision TCP 443 主力
 - [x] hy2 UDP 443 + Salamander obfs
 - [x] UDP 端口跳跃 443-450
 - [x] Nginx 8443 伪装站
