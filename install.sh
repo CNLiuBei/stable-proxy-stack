@@ -1518,8 +1518,46 @@ setup_nginx() {
     write_nginx_config
 }
 
+# Ubuntu 22.04 / nginx 1.18 用 listen ... http2；nginx 1.25.1+ 用 http2 on;
+nginx_http2_listen_extra() {
+    local ver maj min patch rest
+    ver=$(nginx -v 2>&1 | sed -n 's|.*/||p')
+    maj=${ver%%.*}
+    rest=${ver#*.}
+    min=${rest%%.*}
+    patch=${rest#*.}
+    patch=${patch%%[-~]*}
+    if [[ "${maj}" -gt 1 ]] \
+        || [[ "${maj}" -eq 1 && "${min}" -gt 25 ]] \
+        || [[ "${maj}" -eq 1 && "${min}" -eq 25 && "${patch:-0}" -ge 1 ]]; then
+        echo ""
+    else
+        echo " http2"
+    fi
+}
+
+nginx_http2_on_directive() {
+    local ver maj min patch rest
+    ver=$(nginx -v 2>&1 | sed -n 's|.*/||p')
+    maj=${ver%%.*}
+    rest=${ver#*.}
+    min=${rest%%.*}
+    patch=${rest#*.}
+    patch=${patch%%[-~]*}
+    if [[ "${maj}" -gt 1 ]] \
+        || [[ "${maj}" -eq 1 && "${min}" -gt 25 ]] \
+        || [[ "${maj}" -eq 1 && "${min}" -eq 25 && "${patch:-0}" -ge 1 ]]; then
+        echo "    http2 on;"
+    else
+        echo ""
+    fi
+}
+
 write_nginx_config() {
     local tls_dir="${INSTALL_DIR}/tls"
+    local http2_listen http2_on
+    http2_listen=$(nginx_http2_listen_extra)
+    http2_on=$(nginx_http2_on_directive)
     cat >/etc/nginx/conf.d/stable-proxy.conf <<EOF
 server {
     listen 80;
@@ -1529,9 +1567,9 @@ server {
     location / { return 301 https://\$host:8443\$request_uri; }
 }
 server {
-    listen 8443 ssl;
-    listen [::]:8443 ssl;
-    http2 on;
+    listen 8443 ssl${http2_listen};
+    listen [::]:8443 ssl${http2_listen};
+${http2_on}
     server_name ${DOMAIN};
     ssl_certificate     ${tls_dir}/${DOMAIN}.crt;
     ssl_certificate_key ${tls_dir}/${DOMAIN}.key;
