@@ -60,6 +60,8 @@ CHECK_ONLY=false
 SKIP_CHECK=false
 ASSUME_YES=false
 DNS_CONFIRMED=false
+SUB_PANEL_TOKEN=""
+PANEL_URL=""
 
 log()  { echo -e "${GREEN}[+]${NC} $*"; }
 warn() { echo -e "${YELLOW}[!]${NC} $*"; }
@@ -1143,6 +1145,10 @@ EOF
 
 setup_nginx() {
     log "正在配置 Nginx 伪装站..."
+    write_nginx_config
+}
+
+write_nginx_config() {
     local tls_dir="${INSTALL_DIR}/tls"
     cat >/etc/nginx/conf.d/stable-proxy.conf <<EOF
 server {
@@ -1163,10 +1169,65 @@ server {
     root ${WEB_ROOT};
     index index.html;
     location / { try_files \$uri \$uri/ =404; }
+EOF
+    if [[ -n "${SUB_PANEL_TOKEN}" ]]; then
+        cat >>/etc/nginx/conf.d/stable-proxy.conf <<EOF
+    location = /s/${SUB_PANEL_TOKEN}/sub {
+        alias ${INSTALL_DIR}/sub.b64;
+        default_type text/plain;
+        charset utf-8;
+        add_header Profile-Update-Interval "24";
+    }
+    location = /s/${SUB_PANEL_TOKEN}/clash.yaml {
+        alias ${WEB_ROOT}/panel/clash.yaml;
+        default_type text/yaml;
+        charset utf-8;
+    }
+    location /s/${SUB_PANEL_TOKEN}/ {
+        alias ${WEB_ROOT}/panel/;
+        index index.html;
+    }
+EOF
+    fi
+    cat >>/etc/nginx/conf.d/stable-proxy.conf <<'EOF'
 }
 EOF
     rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
     nginx -t
+}
+
+generate_subscribe_web() {
+    local panel_dir="${WEB_ROOT}/panel"
+    local sub_url clash_url
+
+    SUB_PANEL_TOKEN=$(openssl rand -hex 8)
+    PANEL_URL="https://${DOMAIN}:8443/s/${SUB_PANEL_TOKEN}/"
+    sub_url="${PANEL_URL}sub"
+    clash_url="${PANEL_URL}clash.yaml"
+
+    printf '%s\n%s' "${REALITY_LINK}" "${HY2_LINK}" | base64 -w0 >"${INSTALL_DIR}/sub.b64"
+    chmod 644 "${INSTALL_DIR}/sub.b64"
+
+    mkdir -p "${panel_dir}"
+    fetch_asset "assets/subscribe-panel.html" "${panel_dir}/index.html"
+    cp "${INSTALL_DIR}/clash-meta.yaml" "${panel_dir}/clash.yaml"
+    chmod 644 "${panel_dir}/clash.yaml" "${panel_dir}/index.html"
+
+    cat >"${panel_dir}/config.json" <<EOF
+{
+  "domain": "${DOMAIN}",
+  "panelUrl": "${PANEL_URL}",
+  "subUrl": "${sub_url}",
+  "clashUrl": "${clash_url}",
+  "realityLink": "${REALITY_LINK}",
+  "hy2Link": "${HY2_LINK}",
+  "created": "$(date -u +"%Y-%m-%d %H:%M UTC")"
+}
+EOF
+    chmod 644 "${panel_dir}/config.json"
+
+    write_nginx_config
+    systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
 }
 
 setup_systemd() {
@@ -1330,6 +1391,14 @@ proxy-groups:
 EOF
     chmod 600 "${INSTALL_DIR}/clash-meta.yaml"
 
+    generate_subscribe_web
+
+    cat >>"${INSTALL_DIR}/credentials.txt" <<EOF
+PANEL_URL=${PANEL_URL}
+SUB_PANEL_TOKEN=${SUB_PANEL_TOKEN}
+EOF
+    chmod 600 "${INSTALL_DIR}/credentials.txt"
+
     echo
     echo "============================================================"
     echo -e "${GREEN}  安装完成！${NC}"
@@ -1341,6 +1410,9 @@ EOF
     echo "            ${INSTALL_DIR}/credentials.txt"
     echo "            ${INSTALL_DIR}/clash-meta.yaml"
     echo
+    echo -e "${CYAN}  订阅网页（二维码 + 一键导入）:${NC}"
+    echo "  ${PANEL_URL}"
+    echo
     echo -e "${YELLOW}[主力·稳定] VLESS + Reality + Vision${NC}"
     echo "${REALITY_LINK}"
     echo
@@ -1348,7 +1420,8 @@ EOF
     echo "${HY2_LINK}"
     echo
     echo "客户端提示:"
-    echo "  - Clash Meta: 导入 ${INSTALL_DIR}/clash-meta.yaml"
+    echo "  - 手机扫码: 打开上方订阅网页"
+    echo "  - Clash Meta: 网页内一键导入，或 ${INSTALL_DIR}/clash-meta.yaml"
     echo "  - 策略: reality-main 优先，失败自动切 hy2-backup"
     echo "  - 测试: 浏览器访问 https://www.google.com"
     echo
