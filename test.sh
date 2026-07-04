@@ -12,8 +12,8 @@ fail() { echo "[FAIL] $*"; FAIL=$((FAIL+1)); }
 echo "=== stable-proxy-stack dry-run test ==="
 
 bash -n "${SCRIPT_DIR}/install.sh" && ok "install.sh syntax"
-grep -q '^SCRIPT_VERSION="0.0.1"' "${SCRIPT_DIR}/install.sh" && ok "SCRIPT_VERSION 0.0.1" || fail "SCRIPT_VERSION"
-bash "${SCRIPT_DIR}/install.sh" --version 2>/dev/null | grep -q 'v0.0.1' && ok "install.sh --version" || fail "install.sh --version"
+grep -q '^SCRIPT_VERSION="0.0.2"' "${SCRIPT_DIR}/install.sh" && ok "SCRIPT_VERSION 0.0.2" || fail "SCRIPT_VERSION"
+bash "${SCRIPT_DIR}/install.sh" --version 2>/dev/null | grep -q 'v0.0.2' && ok "install.sh --version" || fail "install.sh --version"
 bash -n "${SCRIPT_DIR}/uninstall.sh" && ok "uninstall.sh syntax"
 for s in scripts/*.sh; do bash -n "$s" && ok "$(basename "$s") syntax"; done
 

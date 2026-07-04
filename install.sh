@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.1"
+SCRIPT_VERSION="0.0.2"
 
 set -euo pipefail
 
@@ -1011,6 +1011,19 @@ run_preflight() {
         fi
     done
 
+    # TLS 证书复用检测
+    if [[ -n "${DOMAIN}" ]]; then
+        local tls_crt="${INSTALL_DIR}/tls/${DOMAIN}.crt"
+        local tls_key="${INSTALL_DIR}/tls/${DOMAIN}.key"
+        if tls_cert_usable "${tls_crt}" "${tls_key}" "${DOMAIN}"; then
+            info "TLS 证书: 已存在且有效，安装时将直接复用"
+        elif acme_cert_usable "${DOMAIN}"; then
+            info "TLS 证书: acme.sh 已有有效证书，安装时将自动安装"
+        else
+            info "TLS 证书: 未找到可用证书，安装时将向 Let's Encrypt 申请"
+        fi
+    fi
+
     # firewall / cloud firewall hints for standalone
     if [[ -z "${CF_TOKEN}" ]]; then
         add_warn "Standalone 证书需要公网可访问 TCP 80（本机 UFW 将自动放行）"
@@ -1137,30 +1150,107 @@ install_singbox_binary() {
     ln -sf "${INSTALL_DIR}/sing-box/sing-box" /usr/local/bin/sing-box
 }
 
-issue_tls_cert() {
-    log "正在申请 TLS 证书..."
-    local tls_dir="${INSTALL_DIR}/tls"
-    mkdir -p "${tls_dir}"
+# 证书是否匹配域名且未过期（默认至少剩余 1 天）
+cert_domain_matches() {
+    local crt="$1"
+    local domain="$2"
 
+    openssl x509 -in "${crt}" -noout -ext subject_alt_name 2>/dev/null \
+        | tr ',' '\n' | grep -q "DNS:${domain}" && return 0
+    openssl x509 -in "${crt}" -noout -subject 2>/dev/null \
+        | grep -qE "CN\s*=\s*${domain}" && return 0
+    return 1
+}
+
+tls_cert_usable() {
+    local crt="$1"
+    local key="$2"
+    local domain="$3"
+    local min_secs="${4:-86400}"
+
+    [[ -f "${crt}" && -f "${key}" ]] || return 1
+    openssl x509 -in "${crt}" -noout 2>/dev/null || return 1
+    openssl pkey -in "${key}" -noout 2>/dev/null || return 1
+    openssl x509 -in "${crt}" -noout -checkend "${min_secs}" 2>/dev/null || return 1
+    cert_domain_matches "${crt}" "${domain}"
+}
+
+acme_cert_paths() {
+    local domain="$1"
+    local acme_dir="${HOME}/.acme.sh/${domain}_ecc"
+    local key="${acme_dir}/${domain}.key"
+    local crt="${acme_dir}/fullchain.cer"
+
+    [[ -f "${crt}" ]] || crt="${acme_dir}/${domain}.cer"
+    echo "${crt}|${key}|${acme_dir}"
+}
+
+acme_cert_usable() {
+    local domain="$1"
+    local paths crt key
+
+    paths=$(acme_cert_paths "${domain}")
+    crt="${paths%%|*}"
+    paths="${paths#*|}"
+    key="${paths%%|*}"
+
+    tls_cert_usable "${crt}" "${key}" "${domain}"
+}
+
+ensure_acme_sh() {
     if [[ ! -f "${HOME}/.acme.sh/acme.sh" ]]; then
         http_get "https://get.acme.sh" | sh -s email="${EMAIL}" >/dev/null 2>&1
     fi
     # shellcheck source=/dev/null
     source "${HOME}/.acme.sh/acme.sh.env" 2>/dev/null || true
     "${HOME}/.acme.sh/acme.sh" --set-default-ca --server letsencrypt >/dev/null 2>&1 || true
+}
 
-    if [[ -n "${CF_TOKEN}" ]]; then
-        export CF_Token="${CF_TOKEN}"
-        "${HOME}/.acme.sh/acme.sh" --issue --dns dns_cf -d "${DOMAIN}" --keylength ec-256 --force --server letsencrypt
-    else
-        systemctl stop nginx 2>/dev/null || true
-        "${HOME}/.acme.sh/acme.sh" --issue --standalone -d "${DOMAIN}" --keylength ec-256 --force --server letsencrypt
-    fi
+install_tls_cert_files() {
+    local tls_dir="${INSTALL_DIR}/tls"
 
     "${HOME}/.acme.sh/acme.sh" --install-cert -d "${DOMAIN}" --ecc \
         --key-file "${tls_dir}/${DOMAIN}.key" \
         --fullchain-file "${tls_dir}/${DOMAIN}.crt" \
         --reloadcmd "systemctl reload nginx 2>/dev/null; systemctl restart sing-box 2>/dev/null"
+}
+
+issue_tls_cert() {
+    local tls_dir="${INSTALL_DIR}/tls"
+    local crt="${tls_dir}/${DOMAIN}.crt"
+    local key="${tls_dir}/${DOMAIN}.key"
+    local end_date
+
+    mkdir -p "${tls_dir}"
+
+    if tls_cert_usable "${crt}" "${key}" "${DOMAIN}"; then
+        end_date=$(openssl x509 -in "${crt}" -noout -enddate 2>/dev/null | cut -d= -f2-)
+        log "检测到有效 TLS 证书，跳过申请（到期 ${end_date}）"
+        return 0
+    fi
+
+    ensure_acme_sh
+
+    if acme_cert_usable "${DOMAIN}"; then
+        log "acme.sh 已有 ${DOMAIN} 有效证书，直接安装使用"
+        install_tls_cert_files
+        end_date=$(openssl x509 -in "${crt}" -noout -enddate 2>/dev/null | cut -d= -f2-)
+        info "TLS 证书已就绪（到期 ${end_date}）"
+        return 0
+    fi
+
+    log "未找到可用证书，正在向 Let's Encrypt 申请..."
+    if [[ -n "${CF_TOKEN}" ]]; then
+        export CF_Token="${CF_TOKEN}"
+        "${HOME}/.acme.sh/acme.sh" --issue --dns dns_cf -d "${DOMAIN}" --keylength ec-256 --server letsencrypt
+    else
+        systemctl stop nginx 2>/dev/null || true
+        "${HOME}/.acme.sh/acme.sh" --issue --standalone -d "${DOMAIN}" --keylength ec-256 --server letsencrypt
+    fi
+
+    install_tls_cert_files
+    end_date=$(openssl x509 -in "${crt}" -noout -enddate 2>/dev/null | cut -d= -f2-)
+    log "TLS 证书申请完成（到期 ${end_date}）"
 }
 
 write_singbox_config() {

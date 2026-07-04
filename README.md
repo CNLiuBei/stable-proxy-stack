@@ -30,7 +30,9 @@ apt-get update && apt-get install -y curl wget ca-certificates && \
 curl -fsSL "https://raw.githubusercontent.com/CNLiuBei/stable-proxy-stack/main/install.sh?v=$(date +%s)" | bash
 ```
 
-安装开始时会显示脚本版本（当前 **v0.0.1**）。若与 GitHub 最新不一致，会提示重新拉取，避免 CDN 缓存旧脚本。
+安装开始时会显示脚本版本（当前 **v0.0.2**）。若与 GitHub 最新不一致，会提示重新拉取，避免 CDN 缓存旧脚本。
+
+重装时若已有有效 TLS 证书（本机或 acme.sh），将自动复用，不会重复向 Let's Encrypt 申请。
 
 按中文提示操作：输入域名 → 自动检测 DNS → 选证书方式 → 确认安装。
 
