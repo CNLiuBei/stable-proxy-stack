@@ -3,7 +3,7 @@
 #
 # stable-proxy-stack: VLESS Reality (stable) + Hysteria2 (speed backup)
 #
-SCRIPT_VERSION="0.0.10"
+SCRIPT_VERSION="0.0.11"
 
 set -euo pipefail
 ORIG_INSTALL_ARGS=("$@")
@@ -1135,9 +1135,9 @@ install_packages() {
     wait_dpkg_lock
     log "正在安装系统依赖..."
     apt-get update -qq
-    apt-get install -y -qq curl wget jq openssl ca-certificates ufw nginx iptables dnsutils netcat-openbsd \
+    apt-get install -y -qq curl wget jq openssl ca-certificates ufw nginx iptables dnsutils netcat-openbsd qrencode \
         >/dev/null 2>&1 \
-        || apt-get install -y curl wget jq openssl ca-certificates ufw nginx iptables dnsutils netcat-openbsd
+        || apt-get install -y curl wget jq openssl ca-certificates ufw nginx iptables dnsutils netcat-openbsd qrencode
 }
 
 apply_sysctl() {
@@ -1457,6 +1457,24 @@ EOF
     nginx -t
 }
 
+generate_panel_qrcodes() {
+    local panel_dir="$1"
+    local sub_url="$2"
+    local reality_link="$3"
+    local hy2_link="$4"
+
+    if ! command -v qrencode >/dev/null 2>&1; then
+        warn "未安装 qrencode，订阅页二维码将不可用"
+        return 0
+    fi
+
+    qrencode -o "${panel_dir}/qr-sub.png" -s 5 -m 1 "${sub_url}"
+    qrencode -o "${panel_dir}/qr-reality.png" -s 5 -m 1 "${reality_link}"
+    qrencode -o "${panel_dir}/qr-hy2.png" -s 5 -m 1 "${hy2_link}"
+    chmod 644 "${panel_dir}"/qr-*.png
+    log "订阅页二维码已生成"
+}
+
 generate_subscribe_web() {
     local panel_dir="${WEB_ROOT}/panel"
     local sub_url clash_url
@@ -1503,6 +1521,8 @@ PY
     else
         warn "无法内嵌订阅页配置（缺少 python3/jq），一键导入可能不可用"
     fi
+
+    generate_panel_qrcodes "${panel_dir}" "${sub_url}" "${REALITY_LINK}" "${HY2_LINK}"
 
     write_nginx_config
     systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
@@ -1762,6 +1782,7 @@ fetch_asset "scripts/healthcheck.sh" "${INSTALL_DIR}/scripts/healthcheck.sh"
 fetch_asset "scripts/renew-hook.sh" "${INSTALL_DIR}/scripts/renew-hook.sh"
 fetch_asset "scripts/renew-cert.sh" "${INSTALL_DIR}/scripts/renew-cert.sh"
 fetch_asset "scripts/refresh-clash.sh" "${INSTALL_DIR}/scripts/refresh-clash.sh"
+fetch_asset "scripts/refresh-panel.sh" "${INSTALL_DIR}/scripts/refresh-panel.sh"
 fetch_asset "assets/index.html" "${WEB_ROOT}/index.html"
 
 write_singbox_config

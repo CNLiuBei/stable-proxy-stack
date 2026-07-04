@@ -56,7 +56,7 @@
       <h2>📡 订阅链接（推荐）</h2>
       <p style="font-size:.8rem;color:#94a3b8;margin-bottom:.5rem">一次导入 Reality + hy2 两个节点（Clash 请在分组 stable-proxy 中查看）</p>
       <div class="link-box" id="sub-url"></div>
-      <div class="qr" id="qr-sub"></div>
+      <div class="qr"><img src="qr-sub.png" alt="订阅二维码" width="216" height="216"></div>
       <div class="btns">
         <button class="btn-copy" type="button" id="copy-sub">复制订阅 URL</button>
       </div>
@@ -67,7 +67,7 @@
     <div class="card">
       <h2><span class="tag tag-main">主力</span> VLESS Reality</h2>
       <div class="link-box" id="reality-link"></div>
-      <div class="qr" id="qr-reality"></div>
+      <div class="qr"><img src="qr-reality.png" alt="Reality 二维码" width="216" height="216"></div>
       <div class="btns">
         <button class="btn-copy" type="button" id="copy-reality">复制链接</button>
       </div>
@@ -78,7 +78,7 @@
     <div class="card">
       <h2><span class="tag tag-back">备用</span> Hysteria2</h2>
       <div class="link-box" id="hy2-link"></div>
-      <div class="qr" id="qr-hy2"></div>
+      <div class="qr"><img src="qr-hy2.png" alt="Hysteria2 二维码" width="216" height="216"></div>
       <div class="btns">
         <button class="btn-copy" type="button" id="copy-hy2">复制链接</button>
       </div>
@@ -167,18 +167,6 @@
       ]);
     }
 
-    function makeQr(el, text) {
-      if (!text || typeof QRCode === 'undefined') return;
-      try {
-        QRCode.toCanvas(document.createElement('canvas'), text, { width: 200, margin: 1 }, (err, canvas) => {
-          if (!err && canvas) {
-            el.innerHTML = '';
-            el.appendChild(canvas);
-          }
-        });
-      } catch (_) { /* QR 可选，不影响导入按钮 */ }
-    }
-
     function renderPanel(data) {
       cfg = data;
       document.getElementById('domain-label').textContent = data.domain + ' · ' + (data.created || '');
@@ -194,15 +182,6 @@
       renderSubImports();
       renderNodeImports('import-reality-btns', data.realityLink);
       renderNodeImports('import-hy2-btns', data.hy2Link);
-
-      tryQr();
-    }
-
-    function tryQr() {
-      if (!cfg.subUrl) return;
-      makeQr(document.getElementById('qr-sub'), cfg.subUrl);
-      makeQr(document.getElementById('qr-reality'), cfg.realityLink);
-      makeQr(document.getElementById('qr-hy2'), cfg.hy2Link);
     }
 
     function loadPanel() {
@@ -220,6 +199,5 @@
 
     loadPanel();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js" async defer onload="tryQr()"></script>
 </body>
 </html>
