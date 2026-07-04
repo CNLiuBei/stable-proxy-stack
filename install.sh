@@ -667,8 +667,8 @@ prompt_cert_method() {
 
     echo
     echo -e "${BOLD}--- 步骤 3: 证书申请 ---${NC}"
-    echo "  [1] Cloudflare DNS  — 推荐，无需开放 80 端口"
-    echo "  [2] Standalone HTTP — 需公网 TCP 80（本机 UFW 自动放行）"
+    echo "  [1] Cloudflare DNS  — 需 CF API Token，无需开放 80 端口"
+    echo "  [2] Standalone HTTP — 默认，需公网 TCP 80（本机 UFW 自动放行）"
     echo
 
     if [[ -n "${CF_TOKEN}" ]]; then
@@ -687,7 +687,7 @@ prompt_cert_method() {
     fi
 
     while true; do
-        prompt_read "请选择证书申请方式" choice "1"
+        prompt_read "请选择证书申请方式" choice "2"
         case "${choice}" in
             1|cf|CF|cloudflare|Cloudflare)
                 CERT_MODE="cf"
